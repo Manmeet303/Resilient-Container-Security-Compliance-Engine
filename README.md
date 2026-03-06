@@ -44,9 +44,9 @@ This project is developed for the Advanced Operating Systems curriculum. The arc
 
 | Team Member | Module Ownership | Key Responsibilities |
 | :---- | :---- | :---- |
-| **Mahip** | **Control Plane & Resilience** | Docker Socket API Integration, Auto-Failover Logic, FastAPI backend, and the Real-time Web Dashboard UI. |
+| **Manmeet** | **Control Plane & Resilience** | Docker Socket API Integration, Auto-Failover Logic, FastAPI backend, and the Real-time Web Dashboard UI. |
 | **Margesh** | **Distributed Task Scheduler** | In-Memory Job Queue, gRPC Worker Node deployment, Trivy execution, and the Heartbeat Fault-Tolerance Protocol. |
-| **Manmeet** | **Distributed Cache** | SHA-256 Layer Hashing extraction, Consistent Hashing routing algorithm, and LRU Cache Eviction logic. |
+| **Mahip** | **Distributed Cache** | SHA-256 Layer Hashing extraction, Consistent Hashing routing algorithm, and LRU Cache Eviction logic. |
 
 ## **🚀 Key Features**
 
