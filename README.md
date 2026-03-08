@@ -99,3 +99,10 @@ Built for Advanced Operating Systems
 
 I converted it into a clean `README.md` format you can paste directly. Source: :contentReference[oaicite:0]{index=0}
 ```
+
+
+<!-- pip install fastapi uvicorn requests pydantic -->
+<!-- python -m uvicorn cache_node:app --host 0.0.0.0 --port 8001 -->
+<!-- $env:NODE_ID="cache-node-2"
+>> python -m uvicorn cache_node:app --host 0.0.0.0 --port 8002 -->
+<!-- python example_worker_usage.py -->
