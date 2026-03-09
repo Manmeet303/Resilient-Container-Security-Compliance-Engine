@@ -1,4 +1,4 @@
-from worker_cache_client import DistributedCacheClient, build_layer_hash
+from cache.worker_cache_client import DistributedCacheClient, build_layer_hash
 
 
 def mock_trivy_scan(layer_hash: str) -> dict:
