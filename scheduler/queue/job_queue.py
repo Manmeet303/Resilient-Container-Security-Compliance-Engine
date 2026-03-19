@@ -30,3 +30,19 @@ class JobQueue:
 
     def depth(self):
         return self._queue.qsize()
+
+
+# ── Singleton ──────────────────────────────────────────────────────────────────
+# One shared queue instance used by BOTH docker_listener (producer)
+# and SchedulerService/Dispatcher (consumer).
+# Import get_queue() everywhere instead of constructing JobQueue() directly.
+_global_queue: JobQueue | None = None
+
+
+def get_queue() -> JobQueue:
+    """Return the process-wide singleton JobQueue, creating it on first call."""
+    global _global_queue
+    if _global_queue is None:
+        _global_queue = JobQueue()
+        logger.info("Global JobQueue singleton created.")
+    return _global_queue
