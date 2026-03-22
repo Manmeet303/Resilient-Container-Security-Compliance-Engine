@@ -5,19 +5,19 @@ from scheduler.workers.worker_node import WorkerNode
 
 
 async def main():
-
-    print("Starting Scheduler Test")
+    print("Starting Scheduler")
 
     scheduler = SchedulerService()
 
-    # create workers
+    # WorkerNode registers itself in the registry AND runs heartbeat_loop
+    # so HeartbeatMonitor never marks them dead
     worker1 = WorkerNode(scheduler.registry)
     worker2 = WorkerNode(scheduler.registry)
 
     asyncio.create_task(worker1.heartbeat_loop())
     asyncio.create_task(worker2.heartbeat_loop())
 
-    # simulate jobs
+    # Simulate two test jobs on startup (remove in production)
     await scheduler.queue.enqueue("container1", "img1", "nginx")
     await scheduler.queue.enqueue("container2", "img2", "redis")
 
