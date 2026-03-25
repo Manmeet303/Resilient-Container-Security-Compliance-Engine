@@ -7,26 +7,32 @@ logger = get_logger("scheduler.heartbeat")
 
 class HeartbeatMonitor:
 
-    def __init__(self, registry, timeout=10):
-
+    def __init__(self, registry, queue, timeout=10):
         self.registry = registry
+        self.queue = queue
         self.timeout = timeout
 
     async def monitor(self):
-
         while True:
-
             now = time.time()
 
-            for worker_id, info in self.registry.workers.items():
-
+            for worker_id, info in list(self.registry.workers.items()):
                 if info["status"] == "dead":
                     continue
 
                 if now - info["last_heartbeat"] > self.timeout:
-
                     logger.warning(f"Worker failure detected: {worker_id}")
-
                     self.registry.mark_dead(worker_id)
+
+                    jobs_to_requeue = [
+                        job for job in list(self.queue._in_flight.values())
+                        if job.get("worker_id") == worker_id
+                    ]
+
+                    for job in jobs_to_requeue:
+                        logger.warning(
+                            f"Worker {worker_id} died while handling job {job['job_id']}. Re-enqueueing job."
+                        )
+                        await self.queue.requeue(job)
 
             await asyncio.sleep(5)
