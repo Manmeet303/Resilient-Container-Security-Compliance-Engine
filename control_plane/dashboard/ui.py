@@ -133,6 +133,28 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .empty { text-align: center; padding: 32px; color: var(--muted); font-size: 0.78rem; }
   .empty-icon { font-size: 2rem; margin-bottom: 8px; opacity: 0.4; }
 
+  /* FAILOVER BANNER */
+  .failover-banner {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+    background: linear-gradient(90deg, #7f1d1d, #991b1b);
+    border-bottom: 2px solid var(--red);
+    padding: 12px 28px;
+    display: flex; align-items: center; justify-content: space-between;
+    animation: slideDown 0.4s ease;
+  }
+  @keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
+  .failover-banner-left { display: flex; align-items: center; gap: 12px; }
+  .failover-banner-icon { font-size: 1.4rem; }
+  .failover-banner-title { font-family: var(--mono); font-size: 0.85rem; font-weight: 700; color: #fca5a5; }
+  .failover-banner-sub { font-size: 0.72rem; color: #fecaca; margin-top: 2px; }
+  .failover-banner-btn {
+    font-family: var(--mono); font-size: 0.72rem; font-weight: 700;
+    background: var(--red); color: white; border: none;
+    padding: 6px 16px; border-radius: 6px; cursor: pointer;
+    transition: opacity 0.2s;
+  }
+  .failover-banner-btn:hover { opacity: 0.85; }
+
   /* FOOTER */
   .footer { border-top: 1px solid var(--border); padding: 10px 28px; display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 0.63rem; color: var(--muted); }
 </style>
@@ -353,6 +375,55 @@ let ws = null, events = [], containers = {}, workers = {}, auditLog = [];
 let cacheHits = 0, cacheMisses = 0, failovers = 0, totalEvents = 0;
 let startTime = Date.now(), reconnectTimer = null;
 
+// ── Failover Banner ────────────────────────────────────────────────────────────
+function showFailoverBanner(ev) {
+  const existing = document.getElementById('failover-banner');
+  if (existing) existing.remove();
+
+  const standbyUrl = 'http://localhost:8080';
+  const banner = document.createElement('div');
+  banner.id = 'failover-banner';
+  banner.className = 'failover-banner';
+
+  const left = document.createElement('div');
+  left.className = 'failover-banner-left';
+
+  const icon = document.createElement('div');
+  icon.className = 'failover-banner-icon';
+  icon.textContent = '🚨';
+
+  const text = document.createElement('div');
+  const title = document.createElement('div');
+  title.className = 'failover-banner-title';
+  title.textContent = 'PRIMARY NODE FAILED — STANDBY PROMOTED';
+  const sub = document.createElement('div');
+  sub.className = 'failover-banner-sub';
+  sub.textContent = 'Failover to ' + standbyUrl + ' · Promoted at ' + fmtTime(ev.promoted_at || ev.timestamp);
+  text.appendChild(title);
+  text.appendChild(sub);
+  left.appendChild(icon);
+  left.appendChild(text);
+
+  const btn = document.createElement('button');
+  btn.className = 'failover-banner-btn';
+  btn.textContent = '→ Switch to Standby Dashboard';
+  btn.onclick = function() { window.location.href = standbyUrl; };
+
+  banner.appendChild(left);
+  banner.appendChild(btn);
+  document.body.insertBefore(banner, document.body.firstChild);
+
+  let countdown = 5;
+  const timer = setInterval(function() {
+    countdown--;
+    btn.textContent = '→ Redirecting in ' + countdown + 's...';
+    if (countdown <= 0) {
+      clearInterval(timer);
+      window.location.href = standbyUrl;
+    }
+  }, 1000);
+}
+
 // ── Clock ──────────────────────────────────────────────────────────────────────
 function updateClock() { document.getElementById('clock').textContent = new Date().toTimeString().slice(0,8); }
 setInterval(updateClock, 1000); updateClock();
@@ -371,11 +442,46 @@ function connect() {
   ws.onclose = () => {
     document.getElementById('conn-dot').className = 'conn-dot';
     document.getElementById('conn-label').textContent = 'RECONNECTING...';
-    reconnectTimer = setTimeout(connect, 3000);
+    // If on primary (port 8000), after 3s check if standby is up and redirect
+    if (location.port === '8000') {
+      reconnectTimer = setTimeout(checkStandbyAndRedirect, 3000);
+    } else {
+      reconnectTimer = setTimeout(connect, 3000);
+    }
   };
   ws.onerror = () => ws.close();
 }
 connect();
+
+// ── Standby Failover Check ──────────────────────────────────────────────────────
+let standbyCheckCount = 0;
+async function checkStandbyAndRedirect() {
+  standbyCheckCount++;
+  // First try reconnecting to primary
+  try {
+    const r = await fetch('http://localhost:8000/health', { signal: AbortSignal.timeout(2000) });
+    if (r.ok) { connect(); return; } // primary came back
+  } catch(e) {}
+
+  // Primary still down — check if standby is alive
+  try {
+    const r = await fetch('http://localhost:8080/health', { signal: AbortSignal.timeout(2000) });
+    const data = await r.json();
+    if (data.is_primary || standbyCheckCount >= 2) {
+      // Standby has promoted — show banner and redirect
+      showFailoverBanner({ promoted_at: data.promoted_at, redirect_url: 'http://localhost:8080' });
+      return;
+    }
+  } catch(e) {}
+
+  // Neither up yet — keep retrying
+  if (standbyCheckCount < 5) {
+    reconnectTimer = setTimeout(checkStandbyAndRedirect, 2000);
+  } else {
+    // Give up and just try to reconnect to primary
+    connect();
+  }
+}
 
 // ── Poll /status + /audit-log every 5 s ───────────────────────────────────────
 async function pollStatus() {
@@ -415,6 +521,9 @@ function handleEvent(ev) {
     cacheHits++; setEl('m-cache-hits', cacheHits); updateCacheRatio(); addEvent(ev, 'cyan'); flashPipe('pipe-cache');
   } else if (type === 'cache_miss') {
     cacheMisses++; updateCacheRatio(); addEvent(ev, 'amber');
+  } else if (type === 'standby_promoted') {
+    showFailoverBanner(ev);
+    addEvent(ev, 'red');
   } else { addEvent(ev, 'blue'); }
   const running = Object.values(containers).filter(c => c.status === 'running').length;
   setEl('m-running', running);
