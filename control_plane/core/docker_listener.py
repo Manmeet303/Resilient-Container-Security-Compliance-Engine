@@ -14,6 +14,7 @@ from scheduler.queue.job_queue import get_queue
 # Mahip's distributed cache client
 from cache.worker_cache_client import DistributedCacheClient, build_layer_hash
 
+from control_plane.core.log_monitor import LogMonitor
 logger = get_logger("control_plane.docker_listener")
 
 WATCHED_EVENTS = {"start", "die", "stop", "kill"}
@@ -32,6 +33,8 @@ class DockerEventListener:
         self.resilience_engine = resilience_engine
         self.ws_manager = ws_manager
 
+        # NEW: Initialize the log monitor
+        self.log_monitor = LogMonitor(state_store, ws_manager)
         # Singleton queue — same object SchedulerService/Dispatcher uses
         self.job_queue = get_queue()
 
@@ -111,44 +114,41 @@ class DockerEventListener:
                 "status": "running",
             })
 
-            # Build SHA-256 cache key for this image layer
-            layer_digest = attrs.get("digest", image_name)
-            layer_hash = build_layer_hash(image_name, layer_digest)
+            # 1. Attach Log Monitor immediately!
+            await self.log_monitor.start_monitoring(container_id, container_name, image_name)
 
-            # Check Mahip's distributed cache before dispatching scan
-            cache_response = self.cache_client.get_layer_scan(layer_hash)
+            # 2. Try Cache & Queue (Wrapped safely so offline nodes don't crash us)
+            try:
+                layer_digest = attrs.get("digest", image_name)
+                layer_hash = build_layer_hash(image_name, layer_digest)
+                
+                # This is likely what was throwing the error:
+                cache_response = self.cache_client.get_layer_scan(layer_hash)
 
-            if cache_response.get("hit"):
-                # Cache HIT — reuse result, skip Trivy scan
-                logger.info(
-                    f"Cache HIT for {image_name} (hash={layer_hash[:16]}...) "
-                    f"on node {cache_response.get('node_id', '?')}"
-                )
-                self.state_store.append_audit({
-                    **event_payload,
-                    "action": "cache_hit",
-                    "layer_hash": layer_hash,
-                    "cached_result": cache_response.get("scan_result"),
-                })
-
-            else:
-                # Cache MISS — enqueue scan job for Margesh's dispatcher
-                logger.info(
-                    f"Cache MISS for {image_name} (hash={layer_hash[:16]}...). "
-                    f"Enqueuing scan job."
-                )
-                job_id = await self.job_queue.enqueue(
-                    container_id=container_id,
-                    image_id=layer_hash,
-                    image_name=image_name,
-                )
-                self.state_store.set_queue_depth(self.job_queue.depth())
-                self.state_store.append_audit({
-                    **event_payload,
-                    "action": "scan_enqueued",
-                    "job_id": job_id,
-                    "layer_hash": layer_hash,
-                })
+                if cache_response.get("hit"):
+                    logger.info(f"Cache HIT for {image_name}")
+                    self.state_store.append_audit({
+                        **event_payload,
+                        "action": "cache_hit",
+                        "layer_hash": layer_hash,
+                        "cached_result": cache_response.get("scan_result"),
+                    })
+                else:
+                    logger.info(f"Cache MISS for {image_name}. Enqueuing scan job.")
+                    job_id = await self.job_queue.enqueue(
+                        container_id=container_id,
+                        image_id=layer_hash,
+                        image_name=image_name,
+                    )
+                    self.state_store.set_queue_depth(self.job_queue.depth())
+                    self.state_store.append_audit({
+                        **event_payload,
+                        "action": "scan_enqueued",
+                        "job_id": job_id,
+                        "layer_hash": layer_hash,
+                    })
+            except Exception as e:
+                logger.warning(f"Cache/Queue unavailable, skipping Trivy scan: {e}")
 
         # ── container_die / stop / kill ────────────────────────────────────────
         elif action in ("die", "stop", "kill"):
@@ -158,7 +158,7 @@ class DockerEventListener:
                 **event_payload,
                 "action": "container_stopped",
             })
-
+            await self.log_monitor.stop_monitoring(container_id)
             # Only trigger auto-failover on unintentional die (not manual stop/kill)
             if action == "die":
                 await self.resilience_engine.handle_container_die(

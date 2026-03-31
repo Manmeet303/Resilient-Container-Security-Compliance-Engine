@@ -9,17 +9,14 @@ async def main():
 
     scheduler = SchedulerService()
 
-    # WorkerNode registers itself in the registry AND runs heartbeat_loop
-    # so HeartbeatMonitor never marks them dead
+    # Create 2 WorkerNodes — each registers itself in local registry
+    # AND reports to control plane via HTTP so dashboard shows them
     worker1 = WorkerNode(scheduler.registry)
     worker2 = WorkerNode(scheduler.registry)
 
+    # Start heartbeat loops — keeps workers alive in both registry and dashboard
     asyncio.create_task(worker1.heartbeat_loop())
     asyncio.create_task(worker2.heartbeat_loop())
-
-    # Simulate two test jobs on startup (remove in production)
-    await scheduler.queue.enqueue("container1", "img1", "nginx")
-    await scheduler.queue.enqueue("container2", "img2", "redis")
 
     await scheduler.start()
 

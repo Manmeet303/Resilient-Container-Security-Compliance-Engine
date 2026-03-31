@@ -133,28 +133,6 @@ DASHBOARD_HTML = """<!DOCTYPE html>
   .empty { text-align: center; padding: 32px; color: var(--muted); font-size: 0.78rem; }
   .empty-icon { font-size: 2rem; margin-bottom: 8px; opacity: 0.4; }
 
-  /* FAILOVER BANNER */
-  .failover-banner {
-    position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
-    background: linear-gradient(90deg, #7f1d1d, #991b1b);
-    border-bottom: 2px solid var(--red);
-    padding: 12px 28px;
-    display: flex; align-items: center; justify-content: space-between;
-    animation: slideDown 0.4s ease;
-  }
-  @keyframes slideDown { from { transform: translateY(-100%); } to { transform: translateY(0); } }
-  .failover-banner-left { display: flex; align-items: center; gap: 12px; }
-  .failover-banner-icon { font-size: 1.4rem; }
-  .failover-banner-title { font-family: var(--mono); font-size: 0.85rem; font-weight: 700; color: #fca5a5; }
-  .failover-banner-sub { font-size: 0.72rem; color: #fecaca; margin-top: 2px; }
-  .failover-banner-btn {
-    font-family: var(--mono); font-size: 0.72rem; font-weight: 700;
-    background: var(--red); color: white; border: none;
-    padding: 6px 16px; border-radius: 6px; cursor: pointer;
-    transition: opacity 0.2s;
-  }
-  .failover-banner-btn:hover { opacity: 0.85; }
-
   /* FOOTER */
   .footer { border-top: 1px solid var(--border); padding: 10px 28px; display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 0.63rem; color: var(--muted); }
 </style>
@@ -375,55 +353,6 @@ let ws = null, events = [], containers = {}, workers = {}, auditLog = [];
 let cacheHits = 0, cacheMisses = 0, failovers = 0, totalEvents = 0;
 let startTime = Date.now(), reconnectTimer = null;
 
-// ── Failover Banner ────────────────────────────────────────────────────────────
-function showFailoverBanner(ev) {
-  const existing = document.getElementById('failover-banner');
-  if (existing) existing.remove();
-
-  const standbyUrl = 'http://localhost:8080';
-  const banner = document.createElement('div');
-  banner.id = 'failover-banner';
-  banner.className = 'failover-banner';
-
-  const left = document.createElement('div');
-  left.className = 'failover-banner-left';
-
-  const icon = document.createElement('div');
-  icon.className = 'failover-banner-icon';
-  icon.textContent = '🚨';
-
-  const text = document.createElement('div');
-  const title = document.createElement('div');
-  title.className = 'failover-banner-title';
-  title.textContent = 'PRIMARY NODE FAILED — STANDBY PROMOTED';
-  const sub = document.createElement('div');
-  sub.className = 'failover-banner-sub';
-  sub.textContent = 'Failover to ' + standbyUrl + ' · Promoted at ' + fmtTime(ev.promoted_at || ev.timestamp);
-  text.appendChild(title);
-  text.appendChild(sub);
-  left.appendChild(icon);
-  left.appendChild(text);
-
-  const btn = document.createElement('button');
-  btn.className = 'failover-banner-btn';
-  btn.textContent = '→ Switch to Standby Dashboard';
-  btn.onclick = function() { window.location.href = standbyUrl; };
-
-  banner.appendChild(left);
-  banner.appendChild(btn);
-  document.body.insertBefore(banner, document.body.firstChild);
-
-  let countdown = 5;
-  const timer = setInterval(function() {
-    countdown--;
-    btn.textContent = '→ Redirecting in ' + countdown + 's...';
-    if (countdown <= 0) {
-      clearInterval(timer);
-      window.location.href = standbyUrl;
-    }
-  }, 1000);
-}
-
 // ── Clock ──────────────────────────────────────────────────────────────────────
 function updateClock() { document.getElementById('clock').textContent = new Date().toTimeString().slice(0,8); }
 setInterval(updateClock, 1000); updateClock();
@@ -442,46 +371,11 @@ function connect() {
   ws.onclose = () => {
     document.getElementById('conn-dot').className = 'conn-dot';
     document.getElementById('conn-label').textContent = 'RECONNECTING...';
-    // If on primary (port 8000), after 3s check if standby is up and redirect
-    if (location.port === '8000') {
-      reconnectTimer = setTimeout(checkStandbyAndRedirect, 3000);
-    } else {
-      reconnectTimer = setTimeout(connect, 3000);
-    }
+    reconnectTimer = setTimeout(connect, 3000);
   };
   ws.onerror = () => ws.close();
 }
 connect();
-
-// ── Standby Failover Check ──────────────────────────────────────────────────────
-let standbyCheckCount = 0;
-async function checkStandbyAndRedirect() {
-  standbyCheckCount++;
-  // First try reconnecting to primary
-  try {
-    const r = await fetch('http://localhost:8000/health', { signal: AbortSignal.timeout(2000) });
-    if (r.ok) { connect(); return; } // primary came back
-  } catch(e) {}
-
-  // Primary still down — check if standby is alive
-  try {
-    const r = await fetch('http://localhost:8080/health', { signal: AbortSignal.timeout(2000) });
-    const data = await r.json();
-    if (data.is_primary || standbyCheckCount >= 2) {
-      // Standby has promoted — show banner and redirect
-      showFailoverBanner({ promoted_at: data.promoted_at, redirect_url: 'http://localhost:8080' });
-      return;
-    }
-  } catch(e) {}
-
-  // Neither up yet — keep retrying
-  if (standbyCheckCount < 5) {
-    reconnectTimer = setTimeout(checkStandbyAndRedirect, 2000);
-  } else {
-    // Give up and just try to reconnect to primary
-    connect();
-  }
-}
 
 // ── Poll /status + /audit-log every 5 s ───────────────────────────────────────
 async function pollStatus() {
@@ -508,6 +402,7 @@ function handleEvent(ev) {
   setEl('m-events', totalEvents);
   setEl('event-count-tag', totalEvents + ' events');
   const type = ev.event_type || '';
+
   if (type === 'container_start') {
     containers[ev.container_id] = { container_id: ev.container_id, name: ev.container_name, image: ev.image_name, status: 'running' };
     renderContainers(); flashPipe('pipe-queue'); addEvent(ev, 'blue');
@@ -517,14 +412,36 @@ function handleEvent(ev) {
   } else if (type === 'container_stop' || type === 'container_kill') {
     if (containers[ev.container_id]) containers[ev.container_id].status = 'stopped';
     renderContainers(); addEvent(ev, 'amber');
+  } else if (type === 'anomaly_detected') {
+    // 🚨 NEW: Explicitly handle the anomalies in bright red!
+    addEvent({
+      ...ev,
+      event_type: '🚨 ANOMALY: ' + (ev.keyword ? ev.keyword.toUpperCase() : 'ERROR'),
+      container_name: (ev.container_name || '?') + ' | ' + (ev.log_line || '')
+    }, 'red');
+    flashPipe('pipe-failover');
   } else if (type === 'cache_hit') {
     cacheHits++; setEl('m-cache-hits', cacheHits); updateCacheRatio(); addEvent(ev, 'cyan'); flashPipe('pipe-cache');
   } else if (type === 'cache_miss') {
     cacheMisses++; updateCacheRatio(); addEvent(ev, 'amber');
+  } else if (type === 'worker_update') {
+    workers[ev.worker_id] = { worker_id: ev.worker_id, status: ev.status, load: ev.load };
+    renderWorkers();
+    if (ev.load > 0) flashPipe('pipe-dispatch');
+  } else if (type === 'worker_dead') {
+    if (workers[ev.worker_id]) workers[ev.worker_id].status = 'dead';
+    renderWorkers();
+    addEvent(ev, 'red');
+  } else if (type === 'scan_complete') {
+    flashPipe('pipe-scan');
+    addEvent(ev, 'green');
   } else if (type === 'standby_promoted') {
     showFailoverBanner(ev);
     addEvent(ev, 'red');
-  } else { addEvent(ev, 'blue'); }
+  } else { 
+    addEvent(ev, 'blue'); 
+  }
+
   const running = Object.values(containers).filter(c => c.status === 'running').length;
   setEl('m-running', running);
   const crit = Object.values(containers).filter(c => c.is_critical).length;
@@ -568,11 +485,19 @@ function renderAuditFromApi(entries) {
   if (!recent.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">No audit entries yet</td></tr>'; return; }
   tbody.innerHTML = recent.map(e => {
     const action = e.action || e.event_type || '?';
-    const color = action.includes('cache_hit') ? 'var(--cyan)' : action.includes('enqueued') ? 'var(--accent)' : action.includes('failover') ? 'var(--purple)' : action.includes('died') ? 'var(--red)' : 'var(--muted2)';
-    const detail = e.job_id ? 'job:' + e.job_id.slice(0,8) : (e.layer_hash ? 'hash:' + e.layer_hash.slice(0,8) : '—');
+    // Color anomalies red
+    const color = action.includes('anomaly') ? 'var(--red)' : action.includes('cache_hit') ? 'var(--cyan)' : action.includes('enqueued') ? 'var(--accent)' : action.includes('failover') ? 'var(--purple)' : action.includes('died') ? 'var(--red)' : 'var(--muted2)';
+    
+    // Check if it's an anomaly and display the log line, otherwise show job/hash
+    let detail = '—';
+    if (e.log_line) { detail = trunc(e.log_line, 60); }
+    else if (e.job_id) { detail = 'job:' + e.job_id.slice(0,8); }
+    else if (e.layer_hash) { detail = 'hash:' + e.layer_hash.slice(0,8); }
+    
     return '<tr><td class="mono" style="color:var(--muted)">' + fmtTime(e.timestamp||e.logged_at) + '</td><td class="mono" style="color:' + color + '">' + action + '</td><td class="mono">' + (e.container_id||'').slice(0,12) + '</td><td class="mono" style="color:var(--muted2)">' + trunc(e.image_name||'—',20) + '</td><td style="color:var(--muted);font-size:0.65rem">' + detail + '</td></tr>';
   }).join('');
 }
+
 function clearAudit() { document.getElementById('audit-tbody').innerHTML = '<tr><td colspan="5" class="empty">Cleared</td></tr>'; setEl('audit-count-tag','0 entries'); }
 
 // ── Live Event Feed ────────────────────────────────────────────────────────────
