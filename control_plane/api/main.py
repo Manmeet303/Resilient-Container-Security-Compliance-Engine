@@ -23,14 +23,20 @@ docker_listener   = DockerEventListener(state_store, resilience_engine, ws_manag
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Starting Control Plane master node...")
-    
-    # Save the task to a variable
+
+    # Clear stale workers from previous run so dashboard doesn't show
+    # ghost workers from last session (fixes 4-worker issue on restart)
+    for w in state_store.get_all_workers():
+        state_store.upsert_worker(w["worker_id"], {
+            "worker_id": w["worker_id"],
+            "status": "dead",
+            "load": 0,
+        })
+    logger.info("StateStore: cleared stale workers from previous session.")
+
     listener_task = asyncio.create_task(docker_listener.listen())
-    
     yield
-    
     logger.info("Shutting down Control Plane...")
-    # Explicitly cancel the background task on shutdown
     listener_task.cancel()
 
 app = FastAPI(
@@ -128,16 +134,29 @@ async def worker_dead(worker_id: str):
 async def scan_complete(data: Dict[str, Any]):
     """
     Dispatcher calls this after each scan job completes.
-    Broadcasts scan_complete to dashboard live event feed.
+    Saves vulnerability counts to state and broadcasts to UI.
     """
+    container_id = data.get("container_id")
+    vulns = data.get("vulnerabilities", {})
+    status = data.get("status", "unknown")
+
+    # 1. Save the vulnerability data to the specific container
+    if container_id:
+        state_store.upsert_container(container_id, {
+            "vulnerabilities": vulns,
+            "scan_status": status
+        })
+
+    # 2. Broadcast the live event to the dashboard
     await ws_manager.broadcast({
-        "event_type":   "scan_complete",
-        "job_id":       data.get("job_id"),
-        "worker_id":    data.get("worker_id"),
-        "image_name":   data.get("image_name"),
-        "elapsed_ms":   data.get("elapsed_ms"),
-        "container_id": data.get("container_id"),
-        "timestamp":    data.get("timestamp"),
+        "event_type":      "scan_complete",
+        "job_id":          data.get("job_id"),
+        "worker_id":       data.get("worker_id"),
+        "image_name":      data.get("image_name"),
+        "elapsed_ms":      data.get("elapsed_ms"),
+        "container_id":    container_id,
+        "vulnerabilities": vulns,
+        "timestamp":       data.get("timestamp"),
     })
     return {"status": "ok"}
 

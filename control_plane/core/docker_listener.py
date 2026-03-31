@@ -1,5 +1,4 @@
 import asyncio
-import hashlib
 import uuid
 from datetime import datetime
 
@@ -7,39 +6,30 @@ import docker
 from docker.errors import DockerException
 
 from shared.utils.logger import get_logger
-
-# Singleton queue shared with SchedulerService/Dispatcher
-from scheduler.queue.job_queue import get_queue
-
-# Mahip's distributed cache client
+import httpx
 from cache.worker_cache_client import DistributedCacheClient, build_layer_hash
-
 from control_plane.core.log_monitor import LogMonitor
+
 logger = get_logger("control_plane.docker_listener")
 
 WATCHED_EVENTS = {"start", "die", "stop", "kill"}
 
-# Cache node URLs — match docker-compose / local ports
+# Only include cache nodes that are actually running
+# Remove 8002 if you're only running one cache node
 CACHE_NODES = [
     "http://localhost:8001",
-    "http://localhost:8002",
 ]
 
 
 class DockerEventListener:
 
     def __init__(self, state_store, resilience_engine, ws_manager):
-        self.state_store = state_store
+        self.state_store       = state_store
         self.resilience_engine = resilience_engine
-        self.ws_manager = ws_manager
-
-        # NEW: Initialize the log monitor
-        self.log_monitor = LogMonitor(state_store, ws_manager)
-        # Singleton queue — same object SchedulerService/Dispatcher uses
-        self.job_queue = get_queue()
-
-        # Distributed cache client (consistent hashing across Mahip's nodes)
-        self.cache_client = DistributedCacheClient(CACHE_NODES)
+        self.ws_manager        = ws_manager
+        self.scheduler_url     = 'http://localhost:8010'
+        self.cache_client      = DistributedCacheClient(CACHE_NODES)
+        self.log_monitor       = LogMonitor(state_store, ws_manager)
 
         try:
             self.client = docker.from_env()
@@ -58,7 +48,6 @@ class DockerEventListener:
         logger.info("Docker event listener started.")
         loop = asyncio.get_event_loop()
 
-        # Reconnect loop — retries every 5 s if Docker socket drops
         while True:
             try:
                 def _blocking_listen():
@@ -75,80 +64,115 @@ class DockerEventListener:
                 await loop.run_in_executor(None, _blocking_listen)
 
             except Exception as exc:
-                logger.warning(
-                    f"Docker listener disconnected: {exc}. Retrying in 5s..."
-                )
+                logger.warning(f"Docker listener disconnected: {exc}. Retrying in 5s...")
                 await asyncio.sleep(5)
 
     # ── Event handler ──────────────────────────────────────────────────────────
 
     async def _handle_event(self, raw_event):
-        action = raw_event.get("Action", "")
-        actor = raw_event.get("Actor", {})
-        attrs = actor.get("Attributes", {})
-
-        # 12-char short ID — used consistently across all modules
-        container_id = actor.get("ID", "")[:12]
+        action         = raw_event.get("Action", "")
+        actor          = raw_event.get("Actor", {})
+        attrs          = actor.get("Attributes", {})
+        container_id   = actor.get("ID", "")[:12]
         container_name = attrs.get("name", "unknown")
-        image_name = attrs.get("image", "unknown")
+        image_name     = attrs.get("image", "unknown")
 
         event_payload = {
-            "event_id": str(uuid.uuid4()),
-            "event_type": f"container_{action}",
-            "container_id": container_id,
+            "event_id":       str(uuid.uuid4()),
+            "event_type":     f"container_{action}",
+            "container_id":   container_id,
             "container_name": container_name,
-            "image_name": image_name,
-            "timestamp": datetime.utcnow().isoformat(),
+            "image_name":     image_name,
+            "timestamp":      datetime.utcnow().isoformat(),
         }
 
-        logger.info(
-            f"Docker event: {action} | container={container_name} | image={image_name}"
-        )
+        logger.info(f"Docker event: {action} | container={container_name} | image={image_name}")
 
         # ── container_start ────────────────────────────────────────────────────
         if action == "start":
             self.state_store.upsert_container(container_id, {
                 "container_id": container_id,
-                "name": container_name,
-                "image": image_name,
-                "status": "running",
+                "name":         container_name,
+                "image":        image_name,
+                "status":       "running",
             })
 
-            # 1. Attach Log Monitor immediately!
-            await self.log_monitor.start_monitoring(container_id, container_name, image_name)
+            # Start log monitor for anomaly detection
+            await self.log_monitor.start_monitoring(
+                container_id, container_name, image_name
+            )
 
-            # 2. Try Cache & Queue (Wrapped safely so offline nodes don't crash us)
+            # Cache check — direct httpx to avoid consistent hash routing issues
             try:
                 layer_digest = attrs.get("digest", image_name)
-                layer_hash = build_layer_hash(image_name, layer_digest)
-                
-                # This is likely what was throwing the error:
-                cache_response = self.cache_client.get_layer_scan(layer_hash)
+                layer_hash   = build_layer_hash(image_name, layer_digest)
+                try:
+                    async with httpx.AsyncClient() as cache_http:
+                        cr = await cache_http.get(
+                            f"http://localhost:8001/cache/{layer_hash}",
+                            timeout=2.0,
+                        )
+                        cache_response = cr.json()
+                except Exception:
+                    cache_response = {"hit": False}
 
                 if cache_response.get("hit"):
-                    logger.info(f"Cache HIT for {image_name}")
+                    # ── CACHE HIT ──────────────────────────────────────────────
+                    node_id = cache_response.get("node_id", "cache-node-1")
+                    logger.info(
+                        f"Cache HIT for {image_name} "
+                        f"(hash={layer_hash[:16]}...) on node {node_id}"
+                    )
+                    # Record hit in state_store for Cache Performance panel
+                    self.state_store.record_cache_event(hit=True)
+
                     self.state_store.append_audit({
                         **event_payload,
-                        "action": "cache_hit",
-                        "layer_hash": layer_hash,
+                        "action":        "cache_hit",
+                        "layer_hash":    layer_hash,
                         "cached_result": cache_response.get("scan_result"),
                     })
+
+                    # Broadcast so dashboard Cache Hits counter increments live
+                    await self.ws_manager.broadcast({
+                        "event_type":   "cache_hit",
+                        "container_id": container_id,
+                        "image_name":   image_name,
+                        "layer_hash":   layer_hash,
+                        "node_id":      node_id,
+                        "timestamp":    event_payload["timestamp"],
+                    })
+
                 else:
-                    logger.info(f"Cache MISS for {image_name}. Enqueuing scan job.")
-                    job_id = await self.job_queue.enqueue(
-                        container_id=container_id,
-                        image_id=layer_hash,
-                        image_name=image_name,
+                    # ── CACHE MISS — enqueue scan job ──────────────────────────
+                    logger.info(
+                        f"Cache MISS for {image_name} "
+                        f"(hash={layer_hash[:16]}...). Enqueuing scan job."
                     )
-                    self.state_store.set_queue_depth(self.job_queue.depth())
+                    # Record miss in state_store for Cache Performance panel
+                    self.state_store.record_cache_event(hit=False)
+
+                    job_id = await self._push_job_to_scheduler(
+                        container_id, layer_hash, image_name
+                    )
                     self.state_store.append_audit({
                         **event_payload,
-                        "action": "scan_enqueued",
-                        "job_id": job_id,
+                        "action":     "scan_enqueued",
+                        "job_id":     job_id,
                         "layer_hash": layer_hash,
                     })
-            except Exception as e:
-                logger.warning(f"Cache/Queue unavailable, skipping Trivy scan: {e}")
+
+                    # Broadcast so dashboard can count misses
+                    await self.ws_manager.broadcast({
+                        "event_type":   "cache_miss",
+                        "container_id": container_id,
+                        "image_name":   image_name,
+                        "layer_hash":   layer_hash,
+                        "timestamp":    event_payload["timestamp"],
+                    })
+
+            except Exception as exc:
+                logger.warning(f"Cache/Queue error for {image_name}: {exc}")
 
         # ── container_die / stop / kill ────────────────────────────────────────
         elif action in ("die", "stop", "kill"):
@@ -158,12 +182,35 @@ class DockerEventListener:
                 **event_payload,
                 "action": "container_stopped",
             })
+
+            # Stop log monitor for this container
             await self.log_monitor.stop_monitoring(container_id)
-            # Only trigger auto-failover on unintentional die (not manual stop/kill)
+
+            # Only auto-failover on unexpected die, not manual stop/kill
             if action == "die":
                 await self.resilience_engine.handle_container_die(
                     container_id, container_name, image_name
                 )
 
-        # ── Broadcast all events to dashboard via WebSocket ────────────────────
+        # ── Broadcast Docker event to dashboard ────────────────────────────────
         await self.ws_manager.broadcast(event_payload)
+    async def _push_job_to_scheduler(self, container_id, layer_hash, image_name):
+        """Push scan job to scheduler process via HTTP on port 8010."""
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.post(
+                    f"{self.scheduler_url}/jobs/enqueue",
+                    json={
+                        "container_id": container_id,
+                        "image_id":     layer_hash,
+                        "image_name":   image_name,
+                    },
+                    timeout=3.0,
+                )
+                data = resp.json()
+                job_id = data.get("job_id", "unknown")
+                logger.info(f"Job pushed to scheduler: {job_id[:8]} | image={image_name}")
+                return job_id
+        except Exception as exc:
+            logger.error(f"Could not push job to scheduler: {exc}")
+            return "ipc-failed"
