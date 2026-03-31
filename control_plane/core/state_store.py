@@ -9,7 +9,7 @@ from shared.utils.logger import get_logger
 logger = get_logger("control_plane.state_store")
 
 # Persist state here — survives uvicorn restarts and is readable by standby
-PERSIST_PATH = "/tmp/rcsce_state.json"
+PERSIST_PATH = "rcsce_state.json"
 
 
 class StateStore:
