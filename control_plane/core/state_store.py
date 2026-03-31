@@ -20,7 +20,9 @@ class StateStore:
         self._workers: Dict[str, Dict[str, Any]] = {}
         self._critical_containers: set = set()
         self._audit_log: List[Dict[str, Any]] = []
-        self._queue_depth: int = 0
+        self._queue_depth:   int = 0
+        self._cache_hits:    int = 0
+        self._cache_misses:  int = 0
 
         # Load existing state from disk on startup
         # This means containers survive uvicorn --reload and master restarts
@@ -89,6 +91,27 @@ class StateStore:
         with self._lock:
             return self._queue_depth
 
+    # ── Cache stats ────────────────────────────────────────────────────────────────
+
+    def record_cache_event(self, hit: bool):
+        """Track cache hits and misses for dashboard Cache Performance panel."""
+        with self._lock:
+            if hit:
+                self._cache_hits += 1
+            else:
+                self._cache_misses += 1
+        self.save_to_disk()
+
+    def get_cache_stats(self):
+        with self._lock:
+            hits   = self._cache_hits
+            misses = self._cache_misses
+            total  = hits + misses
+            return {
+                "hits":      hits,
+                "misses":    misses,
+                "hit_rate":  round(hits / total * 100) if total > 0 else 0,
+            }
     # ── Audit log ──────────────────────────────────────────────────────────────
 
     def append_audit(self, event):
@@ -122,6 +145,8 @@ class StateStore:
                     "critical_containers": list(self._critical_containers),
                     "audit_log":           list(self._audit_log[-200:]),
                     "queue_depth":         self._queue_depth,
+                    "cache_hits":          self._cache_hits,
+                    "cache_misses":        self._cache_misses,
                     "saved_at":            datetime.utcnow().isoformat(),
                 }
             with open(PERSIST_PATH, "w") as f:
@@ -146,6 +171,8 @@ class StateStore:
                 self._critical_containers = set(snapshot.get("critical_containers", []))
                 self._audit_log          = snapshot.get("audit_log", [])
                 self._queue_depth        = snapshot.get("queue_depth", 0)
+                self._cache_hits         = snapshot.get("cache_hits", 0)
+                self._cache_misses       = snapshot.get("cache_misses", 0)
             saved_at = snapshot.get("saved_at", "unknown")
             logger.info(
                 f"StateStore: restored from disk snapshot "

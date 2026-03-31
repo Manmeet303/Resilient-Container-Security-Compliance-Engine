@@ -8,7 +8,7 @@ from shared.utils.logger import get_logger
 
 logger = get_logger("scheduler.dispatcher")
 
-CACHE_NODES       = ["http://localhost:8001", "http://localhost:8002"]
+CACHE_NODES       = ["http://localhost:8001"]
 CONTROL_PLANE_URL = "http://localhost:8000"
 
 
@@ -63,7 +63,17 @@ class Dispatcher:
             layer_hash = job.get("image_id") or build_layer_hash(
                 job["image_name"], job["image_name"]
             )
-            self.cache_client.put_layer_scan(layer_hash, result)
+            # Write directly to cache node via async httpx — bypasses sync requests issue
+            try:
+                async with httpx.AsyncClient() as cache_http:
+                    cache_resp = await cache_http.post(
+                        f"http://localhost:8001/cache",
+                        json={"layer_hash": layer_hash, "scan_result": result},
+                        timeout=3.0,
+                    )
+                    logger.info(f"Cache write: {cache_resp.status_code} | hash={layer_hash[:16]}")
+            except Exception as cache_exc:
+                logger.error(f"Cache write FAILED: {cache_exc}")
             logger.info(
                 f"Completed job {job['job_id'][:8]} on worker {worker_id[:8]} "
                 f"({elapsed_ms}ms) | cached hash={layer_hash[:16]}..."
@@ -89,12 +99,15 @@ class Dispatcher:
                 await client.post(
                     f"{CONTROL_PLANE_URL}/internal/scan/complete",
                     json={
-                        "job_id":       job["job_id"],
-                        "worker_id":    result.get("worker_id"),
-                        "image_name":   job.get("image_name"),
-                        "container_id": job.get("container_id"),
-                        "elapsed_ms":   result.get("elapsed_ms"),
-                        "timestamp":    result.get("timestamp"),
+                        "job_id":          job["job_id"],
+                        "worker_id":       result.get("worker_id"),
+                        "image_name":      job.get("image_name"),
+                        "container_id":    job.get("container_id"),
+                        "elapsed_ms":      result.get("elapsed_ms"),
+                        "timestamp":       result.get("timestamp"),
+                        # 🚨 NEW: Forward the Trivy results!
+                        "vulnerabilities": result.get("vulnerabilities", {}),
+                        "status":          result.get("status", "unknown"),
                     },
                     timeout=2.0,
                 )

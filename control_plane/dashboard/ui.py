@@ -245,8 +245,7 @@ DASHBOARD_HTML = """<!DOCTYPE html>
       </div>
       <div class="panel-body" style="padding:0;">
         <table>
-          <thead><tr><th>ID</th><th>Name</th><th>Image</th><th>Status</th><th>Critical</th></tr></thead>
-          <tbody id="container-tbody">
+<thead><tr><th>ID</th><th>Name</th><th>Image</th><th>Status</th><th>Vulns (C/H)</th><th>Critical</th></tr></thead>          <tbody id="container-tbody">
             <tr><td colspan="5" class="empty"><div class="empty-icon">🐳</div>No containers yet</td></tr>
           </tbody>
         </table>
@@ -398,22 +397,25 @@ async function pollStatus() {
 
 // ── Event handler ──────────────────────────────────────────────────────────────
 function handleEvent(ev) {
-  totalEvents++;
-  setEl('m-events', totalEvents);
-  setEl('event-count-tag', totalEvents + ' events');
   const type = ev.event_type || '';
-
+  // Only count real Docker/app events — not IPC heartbeats
+  const SKIP_COUNT = ['worker_update', 'worker_dead'];
+  if (!SKIP_COUNT.includes(type)) {
+    totalEvents++;
+    setEl('m-events', totalEvents);
+    setEl('event-count-tag', totalEvents + ' events');
+  }
+  
   if (type === 'container_start') {
     containers[ev.container_id] = { container_id: ev.container_id, name: ev.container_name, image: ev.image_name, status: 'running' };
     renderContainers(); flashPipe('pipe-queue'); addEvent(ev, 'blue');
   } else if (type === 'container_die') {
     if (containers[ev.container_id]) containers[ev.container_id].status = 'dead';
-    renderContainers(); failovers++; setEl('m-failovers', failovers); addEvent(ev, 'red'); flashPipe('pipe-failover');
+    renderContainers(); addEvent(ev, 'red');
   } else if (type === 'container_stop' || type === 'container_kill') {
     if (containers[ev.container_id]) containers[ev.container_id].status = 'stopped';
     renderContainers(); addEvent(ev, 'amber');
   } else if (type === 'anomaly_detected') {
-    // 🚨 NEW: Explicitly handle the anomalies in bright red!
     addEvent({
       ...ev,
       event_type: '🚨 ANOMALY: ' + (ev.keyword ? ev.keyword.toUpperCase() : 'ERROR'),
@@ -432,9 +434,25 @@ function handleEvent(ev) {
     if (workers[ev.worker_id]) workers[ev.worker_id].status = 'dead';
     renderWorkers();
     addEvent(ev, 'red');
+  } else if (type === 'auto_failover') {
+    failovers++; setEl('m-failovers', failovers);
+    flashPipe('pipe-failover');
+    addEvent(ev, 'purple');
+    // Add replica to containers table
+    if (ev.replica_name) {
+      const rid = ev.replica_name;
+      containers[rid] = { container_id: rid, name: ev.replica_name, image: ev.image || '?', status: 'running', is_replica: true };
+      renderContainers();
+    }
   } else if (type === 'scan_complete') {
     flashPipe('pipe-scan');
     addEvent(ev, 'green');
+    // 🚨 Correctly closed block below!
+    if (ev.container_id && containers[ev.container_id]) {
+      containers[ev.container_id].vulnerabilities = ev.vulnerabilities;
+      containers[ev.container_id].scan_status = ev.status;
+      renderContainers();
+    }
   } else if (type === 'standby_promoted') {
     showFailoverBanner(ev);
     addEvent(ev, 'red');
@@ -449,17 +467,33 @@ function handleEvent(ev) {
   const uptime = Math.floor((Date.now() - startTime) / 1000);
   setEl('footer-stats', 'Events: ' + totalEvents + ' | Uptime: ' + uptime + 's');
 }
-
 // ── Render Containers ──────────────────────────────────────────────────────────
 function renderContainers() {
   const tbody = document.getElementById('container-tbody');
   const list = Object.values(containers);
   setEl('container-count', list.length);
-  if (!list.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty"><div class="empty-icon">🐳</div>No containers yet</td></tr>'; return; }
+  if (!list.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty"><div class="empty-icon">🐳</div>No containers yet</td></tr>'; return; }
+  
   tbody.innerHTML = list.map(c => {
     const dc = c.status === 'running' ? 'dot-green' : c.status === 'dead' ? 'dot-red' : c.status === 'stopped' ? 'dot-amber' : 'dot-grey';
     const crit = c.is_critical ? '<span class="tag tag-red">CRITICAL</span>' : '<span style="color:var(--muted);font-size:0.65rem">—</span>';
-    return '<tr><td class="mono">' + (c.container_id||'').slice(0,12) + '</td><td>' + (c.name||c.container_name||'?') + '</td><td class="mono" style="color:var(--muted2)">' + trunc(c.image||c.image_name||'?',24) + '</td><td><span class="status-dot ' + dc + '"></span>' + (c.status||'?') + '</td><td>' + crit + '</td></tr>';
+    
+    // Format the Vulnerabilities Column
+    let vulnsHtml = '<span style="color:var(--muted);font-size:0.65rem">scanning...</span>';
+    if (c.vulnerabilities) {
+        const critVuln = c.vulnerabilities.CRITICAL || 0;
+        const highVuln = c.vulnerabilities.HIGH || 0;
+        if (critVuln === 0 && highVuln === 0) {
+            vulnsHtml = '<span class="tag tag-green">0</span>';
+        } else {
+            vulnsHtml = '<span class="tag tag-red">' + critVuln + ' C</span> <span class="tag tag-amber">' + highVuln + ' H</span>';
+        }
+    } else if (c.scan_status === 'trivy_missing' || c.scan_status === 'scan_failed') {
+        vulnsHtml = '<span class="tag tag-red">Failed</span>';
+    }
+
+    // Notice the extra <td> for vulnsHtml!
+    return '<tr><td class="mono">' + (c.container_id||'').slice(0,12) + '</td><td>' + (c.name||c.container_name||'?') + '</td><td class="mono" style="color:var(--muted2)">' + trunc(c.image||c.image_name||'?',24) + '</td><td><span class="status-dot ' + dc + '"></span>' + (c.status||'?') + '</td><td>' + vulnsHtml + '</td><td>' + crit + '</td></tr>';
   }).join('');
 }
 
