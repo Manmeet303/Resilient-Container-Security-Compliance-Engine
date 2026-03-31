@@ -3,347 +3,602 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
-<title>Resilient Container Security Engine</title>
+<title>RCSCE Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap');
+* { box-sizing: border-box; margin: 0; padding: 0; }
 
-  :root {
-    --bg:       #070b14;
-    --surface:  #0c1220;
-    --card:     #101828;
-    --border:   #1a2540;
-    --border2:  #243050;
-    --accent:   #3b82f6;
-    --green:    #10b981;
-    --amber:    #f59e0b;
-    --red:      #ef4444;
-    --purple:   #8b5cf6;
-    --cyan:     #06b6d4;
-    --text:     #e2e8f0;
-    --muted:    #64748b;
-    --muted2:   #94a3b8;
-    --mono:     'JetBrains Mono', monospace;
-    --sans:     'Inter', sans-serif;
-  }
+:root {
+  --bg:       #f4f6f9;
+  --surface:  #ffffff;
+  --border:   #e2e7ef;
+  --border2:  #cdd5e0;
+  --accent:   #2563eb;
+  --accent-bg:#eff6ff;
+  --green:    #16a34a;
+  --green-bg: #f0fdf4;
+  --amber:    #d97706;
+  --amber-bg: #fffbeb;
+  --red:      #dc2626;
+  --red-bg:   #fef2f2;
+  --purple:   #7c3aed;
+  --purple-bg:#f5f3ff;
+  --cyan:     #0891b2;
+  --cyan-bg:  #ecfeff;
+  --text:     #111827;
+  --text2:    #374151;
+  --muted:    #6b7280;
+  --muted2:   #9ca3af;
+  --sans:     'DM Sans', sans-serif;
+  --mono:     'DM Mono', monospace;
+}
 
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height: 100vh; }
+body {
+  font-family: var(--sans);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
 
-  /* TOPBAR */
-  .topbar {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 0 28px; height: 56px;
-    background: var(--surface); border-bottom: 1px solid var(--border);
-    position: sticky; top: 0; z-index: 100;
-  }
-  .topbar-left { display: flex; align-items: center; gap: 14px; }
-  .logo { font-family: var(--mono); font-size: 0.82rem; font-weight: 700; color: var(--accent); letter-spacing: 0.05em; }
-  .logo span { color: var(--muted2); font-weight: 400; }
-  .tag { font-family: var(--mono); font-size: 0.65rem; padding: 2px 8px; border-radius: 4px; font-weight: 600; letter-spacing: 0.06em; }
-  .tag-blue   { background: rgba(59,130,246,0.15);  color: #93c5fd; border: 1px solid rgba(59,130,246,0.25); }
-  .tag-green  { background: rgba(16,185,129,0.12);  color: #6ee7b7; border: 1px solid rgba(16,185,129,0.22); }
-  .tag-amber  { background: rgba(245,158,11,0.12);  color: #fcd34d; border: 1px solid rgba(245,158,11,0.22); }
-  .tag-red    { background: rgba(239,68,68,0.12);   color: #fca5a5; border: 1px solid rgba(239,68,68,0.22); }
-  .tag-purple { background: rgba(139,92,246,0.12);  color: #c4b5fd; border: 1px solid rgba(139,92,246,0.22); }
-  .tag-cyan   { background: rgba(6,182,212,0.12);   color: #67e8f9; border: 1px solid rgba(6,182,212,0.22); }
-  .topbar-right { display: flex; align-items: center; gap: 12px; }
-  .conn-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); transition: background 0.3s; box-shadow: 0 0 6px currentColor; }
-  .conn-dot.connected { background: var(--green); }
-  .conn-label { font-size: 0.72rem; color: var(--muted2); font-family: var(--mono); }
-  .clock { font-family: var(--mono); font-size: 0.72rem; color: var(--muted); }
+/* ── TOP HEADER ── */
+.header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 0 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
 
-  /* LAYOUT */
-  .main { padding: 20px 28px 40px; }
+.header-left { display: flex; align-items: center; gap: 16px; }
 
-  /* METRICS */
-  .metrics { display: grid; grid-template-columns: repeat(6, 1fr); gap: 12px; margin-bottom: 20px; }
-  .metric { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; position: relative; overflow: hidden; }
-  .metric::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; }
-  .metric.blue::after   { background: var(--accent); }
-  .metric.green::after  { background: var(--green);  }
-  .metric.amber::after  { background: var(--amber);  }
-  .metric.red::after    { background: var(--red);    }
-  .metric.purple::after { background: var(--purple); }
-  .metric.cyan::after   { background: var(--cyan);   }
-  .metric-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; font-weight: 600; margin-bottom: 6px; }
-  .metric-value { font-family: var(--mono); font-size: 1.6rem; font-weight: 700; line-height: 1; color: var(--text); transition: color 0.3s; }
-  .metric-sub { font-size: 0.65rem; color: var(--muted); margin-top: 4px; }
+.logo-block { display: flex; align-items: center; gap: 10px; }
+.logo-icon {
+  width: 36px; height: 36px;
+  background: var(--accent);
+  border-radius: 9px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.1rem;
+}
+.logo-text { font-size: 1.1rem; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
+.logo-sub { font-size: 0.75rem; color: var(--muted); font-weight: 400; }
 
-  /* GRID */
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
-  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.badge {
+  font-size: 0.7rem; font-weight: 600; padding: 3px 10px;
+  border-radius: 100px; letter-spacing: 0.04em;
+}
+.badge-blue   { background: var(--accent-bg);  color: var(--accent); }
+.badge-green  { background: var(--green-bg);   color: var(--green);  }
+.badge-purple { background: var(--purple-bg);  color: var(--purple); }
 
-  /* PANEL */
-  .panel { background: var(--card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-  .panel-header { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
-  .panel-title { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted2); display: flex; align-items: center; gap: 8px; }
-  .panel-body { padding: 12px; max-height: 320px; overflow-y: auto; }
-  .panel-body::-webkit-scrollbar { width: 4px; }
-  .panel-body::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+.header-right { display: flex; align-items: center; gap: 20px; }
+.conn-indicator { display: flex; align-items: center; gap: 8px; }
+.conn-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: #d1d5db;
+}
+.conn-dot.connected { background: var(--green); box-shadow: 0 0 0 3px rgba(22,163,74,0.15); }
+.conn-label { font-size: 0.8rem; font-weight: 500; color: var(--muted); }
+.clock { font-family: var(--mono); font-size: 0.85rem; color: var(--muted); }
 
-  /* TABLE */
-  table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
-  th { text-align: left; padding: 6px 10px; color: var(--muted); font-weight: 600; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em; border-bottom: 1px solid var(--border); }
-  td { padding: 7px 10px; border-bottom: 1px solid rgba(26,37,64,0.5); vertical-align: middle; }
-  tr:last-child td { border-bottom: none; }
-  tr:hover td { background: rgba(59,130,246,0.03); }
-  .mono { font-family: var(--mono); font-size: 0.72rem; }
-  .status-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
-  .dot-green  { background: var(--green);  box-shadow: 0 0 5px var(--green); }
-  .dot-red    { background: var(--red);    box-shadow: 0 0 5px var(--red); }
-  .dot-amber  { background: var(--amber);  box-shadow: 0 0 5px var(--amber); }
-  .dot-grey   { background: var(--muted); }
+/* ── STAT CARDS ROW ── */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 16px;
+  padding: 24px 32px 0;
+}
 
-  /* EVENT FEED */
-  .event-list { display: flex; flex-direction: column; gap: 6px; }
-  .event-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 0.73rem; animation: slideIn 0.25s ease; }
-  @keyframes slideIn { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: translateY(0); } }
-  .event-time { font-family: var(--mono); font-size: 0.65rem; color: var(--muted); white-space: nowrap; padding-top: 1px; }
-  .event-body { flex: 1; }
-  .event-type { font-family: var(--mono); font-size: 0.68rem; font-weight: 700; margin-bottom: 2px; }
-  .event-detail { color: var(--muted2); font-size: 0.68rem; }
+.stat-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px 22px;
+  position: relative;
+  overflow: hidden;
+  transition: box-shadow 0.2s;
+}
+.stat-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+.stat-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  border-radius: 14px 14px 0 0;
+}
+.stat-card.blue::before   { background: var(--accent); }
+.stat-card.green::before  { background: var(--green);  }
+.stat-card.amber::before  { background: var(--amber);  }
+.stat-card.cyan::before   { background: var(--cyan);   }
+.stat-card.red::before    { background: var(--red);    }
+.stat-card.purple::before { background: var(--purple); }
 
-  /* CACHE BAR */
-  .cache-bar-wrap { background: var(--surface); border-radius: 6px; overflow: hidden; height: 8px; margin-top: 8px; }
-  .cache-bar-fill { height: 100%; background: linear-gradient(90deg, var(--green), var(--cyan)); border-radius: 6px; transition: width 0.6s ease; }
+.stat-label { font-size: 0.72rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; margin-bottom: 10px; }
+.stat-value { font-family: var(--mono); font-size: 2rem; font-weight: 500; line-height: 1; color: var(--text); }
+.stat-sub { font-size: 0.72rem; color: var(--muted2); margin-top: 6px; }
 
-  /* WORKER CARD */
-  .worker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 12px; }
-  .worker-card { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 12px; }
-  .worker-name { font-family: var(--mono); font-size: 0.75rem; font-weight: 700; margin-bottom: 6px; }
-  .worker-stat { font-size: 0.68rem; color: var(--muted2); display: flex; justify-content: space-between; margin-top: 3px; }
-  .worker-stat span { color: var(--text); font-family: var(--mono); }
+/* ── PIPELINE STRIP ── */
+.pipeline-strip {
+  margin: 20px 32px 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 18px 28px;
+  display: flex;
+  align-items: center;
+  overflow-x: auto;
+  gap: 0;
+}
+.pipe-step { display: flex; flex-direction: column; align-items: center; gap: 5px; min-width: 96px; }
+.pipe-icon {
+  width: 44px; height: 44px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.2rem;
+  position: relative;
+  transition: transform 0.2s;
+}
+.pipe-icon.active::after {
+  content: '';
+  position: absolute; inset: -4px;
+  border-radius: 15px;
+  border: 2px solid currentColor;
+  opacity: 0.35;
+  animation: ripple 1.5s infinite;
+}
+@keyframes ripple { 0%,100% { transform:scale(1); opacity:0.35; } 50% { transform:scale(1.08); opacity:0.1; } }
+.pipe-icon.blue   { background: var(--accent-bg);  color: var(--accent); }
+.pipe-icon.green  { background: var(--green-bg);   color: var(--green);  }
+.pipe-icon.amber  { background: var(--amber-bg);   color: var(--amber);  }
+.pipe-icon.purple { background: var(--purple-bg);  color: var(--purple); }
+.pipe-icon.cyan   { background: var(--cyan-bg);    color: var(--cyan);   }
+.pipe-label { font-size: 0.72rem; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 0.05em; }
+.pipe-sub { font-size: 0.67rem; font-family: var(--mono); color: var(--muted); }
+.pipe-arrow { color: var(--border2); font-size: 1.2rem; padding: 0 8px; padding-bottom: 18px; flex-shrink: 0; }
 
-  /* PIPELINE */
-  .pipeline { display: flex; align-items: center; gap: 0; padding: 16px; background: var(--surface); border-bottom: 1px solid var(--border); overflow-x: auto; }
-  .pipe-step { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 90px; }
-  .pipe-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; position: relative; }
-  .pipe-icon.active::after { content: ''; position: absolute; inset: -3px; border-radius: 10px; border: 2px solid currentColor; opacity: 0.4; animation: pulse 1.5s infinite; }
-  @keyframes pulse { 0%, 100% { opacity: 0.4; transform: scale(1); } 50% { opacity: 0.1; transform: scale(1.1); } }
-  .pipe-icon.blue   { background: rgba(59,130,246,0.15); color: var(--accent); }
-  .pipe-icon.green  { background: rgba(16,185,129,0.15); color: var(--green); }
-  .pipe-icon.amber  { background: rgba(245,158,11,0.15); color: var(--amber); }
-  .pipe-icon.purple { background: rgba(139,92,246,0.15); color: var(--purple); }
-  .pipe-icon.cyan   { background: rgba(6,182,212,0.15);  color: var(--cyan); }
-  .pipe-label { font-size: 0.62rem; color: var(--muted2); text-align: center; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
-  .pipe-sublabel { font-family: var(--mono); font-size: 0.6rem; color: var(--muted); text-align: center; }
-  .pipe-arrow { font-size: 1rem; color: var(--border2); padding: 0 6px; flex-shrink: 0; padding-bottom: 16px; }
+/* ── TABS ── */
+.tabs-bar {
+  margin: 24px 32px 0;
+  display: flex;
+  gap: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 6px;
+  width: fit-content;
+}
+.tab-btn {
+  padding: 9px 22px;
+  border: none; background: none;
+  font-family: var(--sans); font-size: 0.85rem; font-weight: 500;
+  color: var(--muted); cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.15s;
+  display: flex; align-items: center; gap: 8px;
+}
+.tab-btn:hover { background: var(--bg); color: var(--text); }
+.tab-btn.active { background: var(--accent); color: #fff; font-weight: 600; }
+.tab-btn .tab-count {
+  background: rgba(255,255,255,0.25);
+  border-radius: 100px;
+  font-size: 0.7rem;
+  padding: 1px 7px;
+  font-family: var(--mono);
+}
+.tab-btn:not(.active) .tab-count {
+  background: var(--border);
+  color: var(--muted);
+}
 
-  /* EMPTY */
-  .empty { text-align: center; padding: 32px; color: var(--muted); font-size: 0.78rem; }
-  .empty-icon { font-size: 2rem; margin-bottom: 8px; opacity: 0.4; }
+/* ── TAB PANELS ── */
+.tab-content { display: none; padding: 20px 32px 40px; }
+.tab-content.active { display: block; }
 
-  /* FOOTER */
-  .footer { border-top: 1px solid var(--border); padding: 10px 28px; display: flex; justify-content: space-between; align-items: center; font-family: var(--mono); font-size: 0.63rem; color: var(--muted); }
+/* ── TABLE ── */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.card-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.card-title { font-size: 0.95rem; font-weight: 600; color: var(--text); }
+.card-body { padding: 0; }
+.card-body.padded { padding: 20px 24px; }
+
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  text-align: left;
+  padding: 12px 20px;
+  font-size: 0.72rem; font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+tbody td {
+  padding: 14px 20px;
+  font-size: 0.85rem;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr:hover td { background: var(--bg); }
+
+.mono { font-family: var(--mono); font-size: 0.8rem; }
+
+/* ── STATUS PILL ── */
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 0.78rem; font-weight: 500;
+  padding: 4px 12px; border-radius: 100px;
+}
+.pill-green  { background: var(--green-bg);   color: var(--green);  }
+.pill-red    { background: var(--red-bg);      color: var(--red);    }
+.pill-amber  { background: var(--amber-bg);    color: var(--amber);  }
+.pill-muted  { background: var(--bg);          color: var(--muted);  border: 1px solid var(--border); }
+.pill .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+/* ── VULN BADGES ── */
+.vuln-badge {
+  display: inline-flex; align-items: center;
+  font-size: 0.72rem; font-weight: 600; font-family: var(--mono);
+  padding: 3px 10px; border-radius: 6px; margin-right: 4px;
+}
+.vuln-c { background: var(--red-bg);    color: var(--red);   }
+.vuln-h { background: var(--amber-bg);  color: var(--amber); }
+.vuln-ok{ background: var(--green-bg);  color: var(--green); }
+
+/* ── CRITICAL TAG ── */
+.crit-tag { background: var(--red-bg); color: var(--red); border: 1px solid rgba(220,38,38,0.2); font-size: 0.7rem; font-weight: 600; padding: 3px 9px; border-radius: 6px; }
+
+/* ── EVENT FEED ── */
+.event-feed { display: flex; flex-direction: column; gap: 8px; }
+.event-row {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 14px 18px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  animation: slideIn 0.2s ease;
+}
+@keyframes slideIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
+.event-time { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); white-space: nowrap; padding-top: 2px; min-width: 72px; }
+.event-type-badge {
+  font-family: var(--mono); font-size: 0.72rem; font-weight: 600;
+  padding: 3px 10px; border-radius: 6px; white-space: nowrap;
+}
+.event-detail-text { font-size: 0.82rem; color: var(--text2); line-height: 1.4; }
+
+/* ── WORKER CARDS ── */
+.worker-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.worker-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px;
+}
+.worker-card.dead { border-color: rgba(220,38,38,0.3); background: var(--red-bg); }
+.worker-id { font-family: var(--mono); font-size: 0.78rem; color: var(--text); margin-bottom: 14px; font-weight: 500; }
+.worker-row { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; font-size: 0.82rem; }
+.worker-row-label { color: var(--muted); }
+.worker-row-val { font-family: var(--mono); font-weight: 500; color: var(--text2); }
+
+/* ── CACHE PANEL ── */
+.cache-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.cache-stat-row { display: flex; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.cache-stat-row:last-child { border-bottom: none; }
+.cache-stat-label { font-size: 0.85rem; color: var(--text2); }
+.cache-stat-val { font-family: var(--mono); font-size: 1.1rem; font-weight: 500; }
+.hit-rate-bar { margin-top: 16px; }
+.hit-rate-track { background: var(--bg); border-radius: 100px; height: 10px; overflow: hidden; margin-top: 8px; border: 1px solid var(--border); }
+.hit-rate-fill { height: 100%; background: linear-gradient(90deg, var(--green), var(--cyan)); border-radius: 100px; transition: width 0.6s ease; }
+
+/* ── EMPTY STATE ── */
+.empty-state { text-align: center; padding: 56px 24px; color: var(--muted); }
+.empty-state-icon { font-size: 2.5rem; margin-bottom: 12px; opacity: 0.4; }
+.empty-state-text { font-size: 0.9rem; }
+
+/* ── FAILOVER BANNER ── */
+.failover-banner {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 9999;
+  background: linear-gradient(90deg, #991b1b, #b91c1c);
+  padding: 14px 32px;
+  display: flex; align-items: center; justify-content: space-between;
+  box-shadow: 0 4px 20px rgba(220,38,38,0.3);
+  animation: slideDown 0.35s ease;
+}
+@keyframes slideDown { from { transform:translateY(-100%); } to { transform:translateY(0); } }
+.failover-banner-left { display: flex; align-items: center; gap: 14px; }
+.failover-banner-icon { font-size: 1.5rem; }
+.failover-banner-title { font-size: 0.9rem; font-weight: 700; color: #fecaca; }
+.failover-banner-sub { font-size: 0.77rem; color: #fca5a5; margin-top: 2px; }
+.failover-banner-btn {
+  font-family: var(--sans); font-size: 0.82rem; font-weight: 600;
+  background: rgba(255,255,255,0.15); color: white; border: 1px solid rgba(255,255,255,0.3);
+  padding: 8px 18px; border-radius: 8px; cursor: pointer;
+}
+
+/* ── TWO-COL LAYOUT ── */
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.three-col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; }
+
+/* ── CLEAR BTN ── */
+.btn-ghost {
+  font-size: 0.78rem; font-weight: 500;
+  background: none; border: 1px solid var(--border);
+  color: var(--muted); padding: 5px 14px; border-radius: 7px;
+  cursor: pointer;
+}
+.btn-ghost:hover { border-color: var(--border2); color: var(--text2); }
 </style>
 </head>
 <body>
 
-<div class="topbar">
-  <div class="topbar-left">
-    <div class="logo">RCSCE <span>/ master-node</span></div>
-    <span class="tag tag-blue">Phase 5</span>
-    <span class="tag tag-green">Control Plane</span>
-    <span class="tag tag-purple">AOS · TAMU-CC</span>
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <div class="logo-block">
+      <div class="logo-icon">🛡️</div>
+      <div>
+        <div class="logo-text">RCSCE</div>
+        <div class="logo-sub">Resilient Container Security Engine</div>
+      </div>
+    </div>
+    <span class="badge badge-blue">Phase 5</span>
+    <span class="badge badge-green">Control Plane</span>
+    <span class="badge badge-purple">AOS · TAMU-CC · Code Gems</span>
   </div>
-  <div class="topbar-right">
+  <div class="header-right">
     <span class="clock" id="clock">--:--:--</span>
-    <span class="conn-dot" id="conn-dot"></span>
-    <span class="conn-label" id="conn-label">DISCONNECTED</span>
+    <div class="conn-indicator">
+      <span class="conn-dot" id="conn-dot"></span>
+      <span class="conn-label" id="conn-label">DISCONNECTED</span>
+    </div>
+  </div>
+</div>
+
+<!-- STAT CARDS -->
+<div class="stats-row">
+  <div class="stat-card blue">
+    <div class="stat-label">Total Events</div>
+    <div class="stat-value" id="m-events">0</div>
+    <div class="stat-sub">since startup</div>
+  </div>
+  <div class="stat-card green">
+    <div class="stat-label">Running</div>
+    <div class="stat-value" id="m-running">0</div>
+    <div class="stat-sub">containers</div>
+  </div>
+  <div class="stat-card amber">
+    <div class="stat-label">Queue Depth</div>
+    <div class="stat-value" id="m-queue">0</div>
+    <div class="stat-sub">pending jobs</div>
+  </div>
+  <div class="stat-card cyan">
+    <div class="stat-label">Cache Hits</div>
+    <div class="stat-value" id="m-cache-hits">0</div>
+    <div class="stat-sub" id="m-cache-ratio">0% hit rate</div>
+  </div>
+  <div class="stat-card red">
+    <div class="stat-label">Auto-Failovers</div>
+    <div class="stat-value" id="m-failovers">0</div>
+    <div class="stat-sub">replicas created</div>
+  </div>
+  <div class="stat-card purple">
+    <div class="stat-label">Critical</div>
+    <div class="stat-value" id="m-critical">0</div>
+    <div class="stat-sub">marked containers</div>
   </div>
 </div>
 
 <!-- PIPELINE -->
-<div class="panel" style="margin:16px 28px 0;border-radius:12px 12px 0 0;">
-  <div class="pipeline">
-    <div class="pipe-step">
-      <div class="pipe-icon blue active" id="pipe-docker">🐳</div>
-      <div class="pipe-label">Docker</div>
-      <div class="pipe-sublabel" id="pipe-docker-sub">listening</div>
-    </div>
-    <div class="pipe-arrow">→</div>
-    <div class="pipe-step">
-      <div class="pipe-icon blue" id="pipe-listener">📡</div>
-      <div class="pipe-label">Listener</div>
-      <div class="pipe-sublabel" id="pipe-listener-sub">events</div>
-    </div>
-    <div class="pipe-arrow">→</div>
-    <div class="pipe-step">
-      <div class="pipe-icon cyan" id="pipe-cache">⚡</div>
-      <div class="pipe-label">Cache</div>
-      <div class="pipe-sublabel" id="pipe-cache-sub">check</div>
-    </div>
-    <div class="pipe-arrow">→</div>
-    <div class="pipe-step">
-      <div class="pipe-icon amber" id="pipe-queue">📋</div>
-      <div class="pipe-label">Queue</div>
-      <div class="pipe-sublabel" id="pipe-queue-sub">0 jobs</div>
-    </div>
-    <div class="pipe-arrow">→</div>
-    <div class="pipe-step">
-      <div class="pipe-icon purple" id="pipe-dispatch">⚙️</div>
-      <div class="pipe-label">Dispatch</div>
-      <div class="pipe-sublabel" id="pipe-dispatch-sub">workers</div>
-    </div>
-    <div class="pipe-arrow">→</div>
-    <div class="pipe-step">
-      <div class="pipe-icon green" id="pipe-scan">🔍</div>
-      <div class="pipe-label">Scan</div>
-      <div class="pipe-sublabel" id="pipe-scan-sub">Trivy</div>
-    </div>
-    <div class="pipe-arrow">→</div>
-    <div class="pipe-step">
-      <div class="pipe-icon green" id="pipe-failover">🛡️</div>
-      <div class="pipe-label">Failover</div>
-      <div class="pipe-sublabel" id="pipe-failover-sub">resilience</div>
-    </div>
+<div class="pipeline-strip">
+  <div class="pipe-step">
+    <div class="pipe-icon blue active" id="pipe-docker">🐳</div>
+    <div class="pipe-label">Docker</div>
+    <div class="pipe-sub" id="pipe-docker-sub">listening</div>
+  </div>
+  <div class="pipe-arrow">→</div>
+  <div class="pipe-step">
+    <div class="pipe-icon blue" id="pipe-listener">📡</div>
+    <div class="pipe-label">Listener</div>
+    <div class="pipe-sub" id="pipe-listener-sub">events</div>
+  </div>
+  <div class="pipe-arrow">→</div>
+  <div class="pipe-step">
+    <div class="pipe-icon cyan" id="pipe-cache">⚡</div>
+    <div class="pipe-label">Cache</div>
+    <div class="pipe-sub" id="pipe-cache-sub">check</div>
+  </div>
+  <div class="pipe-arrow">→</div>
+  <div class="pipe-step">
+    <div class="pipe-icon amber" id="pipe-queue">📋</div>
+    <div class="pipe-label">Queue</div>
+    <div class="pipe-sub" id="pipe-queue-sub">0 jobs</div>
+  </div>
+  <div class="pipe-arrow">→</div>
+  <div class="pipe-step">
+    <div class="pipe-icon purple" id="pipe-dispatch">⚙️</div>
+    <div class="pipe-label">Dispatch</div>
+    <div class="pipe-sub" id="pipe-dispatch-sub">0 workers</div>
+  </div>
+  <div class="pipe-arrow">→</div>
+  <div class="pipe-step">
+    <div class="pipe-icon green" id="pipe-scan">🔍</div>
+    <div class="pipe-label">Scan</div>
+    <div class="pipe-sub" id="pipe-scan-sub">Trivy</div>
+  </div>
+  <div class="pipe-arrow">→</div>
+  <div class="pipe-step">
+    <div class="pipe-icon green" id="pipe-failover">🛡️</div>
+    <div class="pipe-label">Failover</div>
+    <div class="pipe-sub" id="pipe-failover-sub">resilience</div>
   </div>
 </div>
 
-<div class="main" style="padding-top:16px;">
+<!-- TABS -->
+<div class="tabs-bar">
+  <button class="tab-btn active" onclick="switchTab('containers')">🐳 Containers <span class="tab-count" id="tab-count-containers">0</span></button>
+  <button class="tab-btn" onclick="switchTab('events')">📡 Live Events <span class="tab-count" id="tab-count-events">0</span></button>
+  <button class="tab-btn" onclick="switchTab('workers')">⚙️ Workers <span class="tab-count" id="tab-count-workers">0</span></button>
+  <button class="tab-btn" onclick="switchTab('cache')">⚡ Cache</button>
+  <button class="tab-btn" onclick="switchTab('audit')">📜 Audit Log <span class="tab-count" id="tab-count-audit">0</span></button>
+</div>
 
-  <!-- METRICS -->
-  <div class="metrics">
-    <div class="metric blue">
-      <div class="metric-label">Total Events</div>
-      <div class="metric-value" id="m-events">0</div>
-      <div class="metric-sub">since startup</div>
+<!-- TAB: CONTAINERS -->
+<div class="tab-content active" id="tab-containers">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Active Containers</div>
+      <span id="container-count" style="font-size:0.82rem;color:var(--muted);">0 containers</span>
     </div>
-    <div class="metric green">
-      <div class="metric-label">Running</div>
-      <div class="metric-value" id="m-running">0</div>
-      <div class="metric-sub">containers</div>
-    </div>
-    <div class="metric amber">
-      <div class="metric-label">Queue Depth</div>
-      <div class="metric-value" id="m-queue">0</div>
-      <div class="metric-sub">pending jobs</div>
-    </div>
-    <div class="metric cyan">
-      <div class="metric-label">Cache Hits</div>
-      <div class="metric-value" id="m-cache-hits">0</div>
-      <div class="metric-sub" id="m-cache-ratio">0% hit rate</div>
-    </div>
-    <div class="metric red">
-      <div class="metric-label">Auto-Failovers</div>
-      <div class="metric-value" id="m-failovers">0</div>
-      <div class="metric-sub">replicas spun up</div>
-    </div>
-    <div class="metric purple">
-      <div class="metric-label">Critical</div>
-      <div class="metric-value" id="m-critical">0</div>
-      <div class="metric-sub">marked containers</div>
-    </div>
-  </div>
-
-  <!-- ROW 1: Containers + Events -->
-  <div class="grid-2">
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">🐳 Active Containers</div>
-        <span class="tag tag-green" id="container-count">0</span>
-      </div>
-      <div class="panel-body" style="padding:0;">
-        <table>
-<thead><tr><th>ID</th><th>Name</th><th>Image</th><th>Status</th><th>Vulns (C/H)</th><th>Critical</th></tr></thead>          <tbody id="container-tbody">
-            <tr><td colspan="5" class="empty"><div class="empty-icon">🐳</div>No containers yet</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">📡 Live Event Feed</div>
-        <span class="tag tag-blue" id="event-count-tag">0 events</span>
-      </div>
-      <div class="panel-body">
-        <div class="event-list" id="event-list">
-          <div class="empty"><div class="empty-icon">📡</div>Waiting for Docker events...</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- ROW 2: Workers + Cache + Queue -->
-  <div class="grid-3">
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">⚙️ Workers</div>
-        <span class="tag tag-purple" id="worker-count-tag">0 workers</span>
-      </div>
-      <div class="worker-grid" id="worker-grid">
-        <div class="empty" style="grid-column:1/-1"><div class="empty-icon">⚙️</div>No workers registered</div>
-      </div>
-    </div>
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">⚡ Cache Performance</div>
-        <span class="tag tag-cyan">Mahip's Cache</span>
-      </div>
-      <div class="panel-body">
-        <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-          <span style="font-size:0.72rem;color:var(--muted2)">Hits</span>
-          <span class="mono" id="cache-hits-val" style="color:var(--green)">0</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:8px;">
-          <span style="font-size:0.72rem;color:var(--muted2)">Misses</span>
-          <span class="mono" id="cache-misses-val" style="color:var(--amber)">0</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
-          <span style="font-size:0.72rem;color:var(--muted2)">Hit Rate</span>
-          <span class="mono" id="cache-ratio-val" style="color:var(--cyan)">0%</span>
-        </div>
-        <div class="cache-bar-wrap"><div class="cache-bar-fill" id="cache-bar" style="width:0%"></div></div>
-        <div style="margin-top:14px;display:flex;justify-content:space-between;">
-          <span style="font-size:0.72rem;color:var(--muted2)">Cache Entries</span>
-          <span class="mono" id="cache-entries-val">0</span>
-        </div>
-        <div style="display:flex;justify-content:space-between;margin-top:6px;">
-          <span style="font-size:0.72rem;color:var(--muted2)">Node</span>
-          <span class="mono" style="color:var(--purple)" id="cache-node-val">—</span>
-        </div>
-      </div>
-    </div>
-    <div class="panel">
-      <div class="panel-header">
-        <div class="panel-title">📋 Scan Queue</div>
-        <span class="tag tag-amber" id="queue-tag">0 pending</span>
-      </div>
-      <div class="panel-body" style="padding:0;">
-        <table>
-          <thead><tr><th>Job ID</th><th>Container</th><th>Status</th></tr></thead>
-          <tbody id="queue-tbody">
-            <tr><td colspan="3" class="empty">Queue empty</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-
-  <!-- ROW 3: Audit Log -->
-  <div class="panel">
-    <div class="panel-header">
-      <div class="panel-title">📜 Audit Log</div>
-      <div style="display:flex;gap:8px;">
-        <span class="tag tag-blue" id="audit-count-tag">0 entries</span>
-        <button onclick="clearAudit()" style="font-size:0.65rem;background:none;border:1px solid var(--border2);color:var(--muted);padding:2px 8px;border-radius:4px;cursor:pointer;">Clear</button>
-      </div>
-    </div>
-    <div class="panel-body" style="max-height:200px;">
+    <div class="card-body">
       <table>
-        <thead><tr><th>Time</th><th>Action</th><th>Container</th><th>Image</th><th>Detail</th></tr></thead>
-        <tbody id="audit-tbody">
-          <tr><td colspan="5" class="empty">No audit entries yet</td></tr>
+        <thead>
+          <tr>
+            <th>Container ID</th>
+            <th>Name</th>
+            <th>Image</th>
+            <th>Status</th>
+            <th>Vulnerabilities</th>
+            <th>Critical</th>
+          </tr>
+        </thead>
+        <tbody id="container-tbody">
+          <tr><td colspan="6"><div class="empty-state"><div class="empty-state-icon">🐳</div><div class="empty-state-text">No containers yet — run a Docker container to get started</div></div></td></tr>
         </tbody>
       </table>
     </div>
   </div>
-
 </div>
 
-<div class="footer">
-  <span>Resilient Container Security &amp; Compliance Engine · Code Gems · TAMU-CC AOS</span>
-  <span id="footer-stats">Events: 0 | Uptime: 0s</span>
+<!-- TAB: EVENTS -->
+<div class="tab-content" id="tab-events">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Live Event Feed</div>
+      <span id="event-count-tag" style="font-size:0.82rem;color:var(--muted);">0 events</span>
+    </div>
+    <div class="card-body padded">
+      <div class="event-feed" id="event-list">
+        <div class="empty-state"><div class="empty-state-icon">📡</div><div class="empty-state-text">Waiting for Docker events...</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: WORKERS -->
+<div class="tab-content" id="tab-workers">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Worker Nodes</div>
+      <span id="worker-count-tag" style="font-size:0.82rem;color:var(--muted);">0 workers</span>
+    </div>
+    <div class="card-body padded">
+      <div class="worker-grid" id="worker-grid">
+        <div class="empty-state"><div class="empty-state-icon">⚙️</div><div class="empty-state-text">No workers registered yet</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scan Queue below workers -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Scan Queue</div>
+      <span id="queue-tag" style="font-size:0.82rem;color:var(--muted);">0 pending</span>
+    </div>
+    <div class="card-body">
+      <table>
+        <thead><tr><th>Job ID</th><th>Container</th><th>Status</th></tr></thead>
+        <tbody id="queue-tbody">
+          <tr><td colspan="3"><div class="empty-state" style="padding:32px;"><div class="empty-state-text">Queue empty</div></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: CACHE -->
+<div class="tab-content" id="tab-cache">
+  <div class="two-col">
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">⚡ Cache Performance — Mahip's Distributed Cache</div>
+      </div>
+      <div class="card-body padded">
+        <div class="cache-stat-row">
+          <span class="cache-stat-label">Cache Hits</span>
+          <span class="cache-stat-val" id="cache-hits-val" style="color:var(--green);">0</span>
+        </div>
+        <div class="cache-stat-row">
+          <span class="cache-stat-label">Cache Misses</span>
+          <span class="cache-stat-val" id="cache-misses-val" style="color:var(--amber);">0</span>
+        </div>
+        <div class="cache-stat-row">
+          <span class="cache-stat-label">Hit Rate</span>
+          <span class="cache-stat-val" id="cache-ratio-val" style="color:var(--cyan);">0%</span>
+        </div>
+        <div class="cache-stat-row">
+          <span class="cache-stat-label">Cache Node</span>
+          <span class="cache-stat-val" id="cache-node-val" style="font-size:0.85rem;color:var(--muted);">cache-node-1:8001</span>
+        </div>
+        <div class="hit-rate-bar">
+          <div style="font-size:0.78rem;color:var(--muted);font-weight:500;">Hit Rate</div>
+          <div class="hit-rate-track"><div class="hit-rate-fill" id="cache-bar" style="width:0%"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title">How Caching Works</div>
+      </div>
+      <div class="card-body padded" style="font-size:0.85rem;line-height:1.8;color:var(--text2);">
+        <p><strong>1. Container starts</strong> → SHA-256 hash computed for image layer</p>
+        <p style="margin-top:12px;"><strong>2. Cache check</strong> → Query distributed cache node on port 8001</p>
+        <p style="margin-top:12px;"><strong>3a. Cache HIT</strong> → Vulnerability data returned instantly, <span style="color:var(--green);font-weight:600;">no Trivy scan needed</span></p>
+        <p style="margin-top:12px;"><strong>3b. Cache MISS</strong> → Job enqueued, Trivy scans image, result stored in cache for future hits</p>
+        <p style="margin-top:12px;"><strong>Algorithm</strong> → Consistent hashing ring with LRU eviction and 1-hour TTL</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- TAB: AUDIT -->
+<div class="tab-content" id="tab-audit">
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title">Audit Log</div>
+      <div style="display:flex;align-items:center;gap:12px;">
+        <span id="audit-count-tag" style="font-size:0.82rem;color:var(--muted);">0 entries</span>
+        <button class="btn-ghost" onclick="clearAudit()">Clear</button>
+      </div>
+    </div>
+    <div class="card-body">
+      <table>
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Action</th>
+            <th>Container</th>
+            <th>Image</th>
+            <th>Detail</th>
+          </tr>
+        </thead>
+        <tbody id="audit-tbody">
+          <tr><td colspan="5"><div class="empty-state"><div class="empty-state-text">No audit entries yet</div></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -351,10 +606,42 @@ DASHBOARD_HTML = """<!DOCTYPE html>
 let ws = null, events = [], containers = {}, workers = {}, auditLog = [];
 let cacheHits = 0, cacheMisses = 0, failovers = 0, totalEvents = 0;
 let startTime = Date.now(), reconnectTimer = null;
+let activeTab = 'containers';
+
+// ── Tab switching ──────────────────────────────────────────────────────────────
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(p => p.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  event.currentTarget.classList.add('active');
+}
 
 // ── Clock ──────────────────────────────────────────────────────────────────────
 function updateClock() { document.getElementById('clock').textContent = new Date().toTimeString().slice(0,8); }
 setInterval(updateClock, 1000); updateClock();
+
+// ── Failover Banner ────────────────────────────────────────────────────────────
+function showFailoverBanner(ev) {
+  const existing = document.getElementById('failover-banner');
+  if (existing) existing.remove();
+  const standbyUrl = 'http://localhost:8080';
+  const banner = document.createElement('div');
+  banner.id = 'failover-banner'; banner.className = 'failover-banner';
+  const left = document.createElement('div'); left.className = 'failover-banner-left';
+  const icon = document.createElement('div'); icon.className = 'failover-banner-icon'; icon.textContent = '🚨';
+  const text = document.createElement('div');
+  const title = document.createElement('div'); title.className = 'failover-banner-title'; title.textContent = 'PRIMARY NODE FAILED — STANDBY PROMOTED';
+  const sub = document.createElement('div'); sub.className = 'failover-banner-sub';
+  sub.textContent = 'Failover to ' + standbyUrl + ' · Promoted at ' + fmtTime(ev.promoted_at || ev.timestamp);
+  text.appendChild(title); text.appendChild(sub); left.appendChild(icon); left.appendChild(text);
+  const btn = document.createElement('button'); btn.className = 'failover-banner-btn';
+  btn.textContent = '→ Switch to Standby'; btn.onclick = () => window.location.href = standbyUrl;
+  banner.appendChild(left); banner.appendChild(btn);
+  document.body.insertBefore(banner, document.body.firstChild);
+  let countdown = 5;
+  const timer = setInterval(() => { countdown--; btn.textContent = '→ Redirecting in ' + countdown + 's...'; if (countdown <= 0) { clearInterval(timer); window.location.href = standbyUrl; } }, 1000);
+}
 
 // ── WebSocket ──────────────────────────────────────────────────────────────────
 function connect() {
@@ -370,13 +657,23 @@ function connect() {
   ws.onclose = () => {
     document.getElementById('conn-dot').className = 'conn-dot';
     document.getElementById('conn-label').textContent = 'RECONNECTING...';
-    reconnectTimer = setTimeout(connect, 3000);
+    if (location.port === '8000') reconnectTimer = setTimeout(checkStandbyAndRedirect, 3000);
+    else reconnectTimer = setTimeout(connect, 3000);
   };
   ws.onerror = () => ws.close();
 }
 connect();
 
-// ── Poll /status + /audit-log every 5 s ───────────────────────────────────────
+let standbyCheckCount = 0;
+async function checkStandbyAndRedirect() {
+  standbyCheckCount++;
+  try { const r = await fetch('http://localhost:8000/health', { signal: AbortSignal.timeout(2000) }); if (r.ok) { connect(); return; } } catch(e) {}
+  try { const r = await fetch('http://localhost:8080/health', { signal: AbortSignal.timeout(2000) }); const data = await r.json(); if (data.is_primary || standbyCheckCount >= 2) { showFailoverBanner({ promoted_at: data.promoted_at }); return; } } catch(e) {}
+  if (standbyCheckCount < 5) reconnectTimer = setTimeout(checkStandbyAndRedirect, 2000);
+  else connect();
+}
+
+// ── Poll ───────────────────────────────────────────────────────────────────────
 async function pollStatus() {
   try {
     const s = await fetch('/status').then(r => r.json());
@@ -388,24 +685,20 @@ async function pollStatus() {
       setEl('pipe-queue-sub', s.scan_queue_depth + ' jobs');
     }
   } catch(e) {}
-  try {
-    const audit = await fetch('/audit-log').then(r => r.json());
-    if (Array.isArray(audit)) renderAuditFromApi(audit);
-  } catch(e) {}
+  try { const audit = await fetch('/audit-log').then(r => r.json()); if (Array.isArray(audit)) renderAuditFromApi(audit); } catch(e) {}
   setTimeout(pollStatus, 5000);
 }
 
 // ── Event handler ──────────────────────────────────────────────────────────────
 function handleEvent(ev) {
   const type = ev.event_type || '';
-  // Only count real Docker/app events — not IPC heartbeats
   const SKIP_COUNT = ['worker_update', 'worker_dead'];
   if (!SKIP_COUNT.includes(type)) {
     totalEvents++;
     setEl('m-events', totalEvents);
     setEl('event-count-tag', totalEvents + ' events');
+    setEl('tab-count-events', totalEvents);
   }
-  
   if (type === 'container_start') {
     containers[ev.container_id] = { container_id: ev.container_id, name: ev.container_name, image: ev.image_name, status: 'running' };
     renderContainers(); flashPipe('pipe-queue'); addEvent(ev, 'blue');
@@ -416,11 +709,7 @@ function handleEvent(ev) {
     if (containers[ev.container_id]) containers[ev.container_id].status = 'stopped';
     renderContainers(); addEvent(ev, 'amber');
   } else if (type === 'anomaly_detected') {
-    addEvent({
-      ...ev,
-      event_type: '🚨 ANOMALY: ' + (ev.keyword ? ev.keyword.toUpperCase() : 'ERROR'),
-      container_name: (ev.container_name || '?') + ' | ' + (ev.log_line || '')
-    }, 'red');
+    addEvent({ ...ev, event_type: '🚨 ANOMALY: ' + (ev.keyword||'').toUpperCase(), container_name: (ev.container_name||'?') + ' | ' + (ev.log_line||'') }, 'red');
     flashPipe('pipe-failover');
   } else if (type === 'cache_hit') {
     cacheHits++; setEl('m-cache-hits', cacheHits); updateCacheRatio(); addEvent(ev, 'cyan'); flashPipe('pipe-cache');
@@ -428,86 +717,81 @@ function handleEvent(ev) {
     cacheMisses++; updateCacheRatio(); addEvent(ev, 'amber');
   } else if (type === 'worker_update') {
     workers[ev.worker_id] = { worker_id: ev.worker_id, status: ev.status, load: ev.load };
-    renderWorkers();
-    if (ev.load > 0) flashPipe('pipe-dispatch');
+    renderWorkers(); if (ev.load > 0) flashPipe('pipe-dispatch');
   } else if (type === 'worker_dead') {
     if (workers[ev.worker_id]) workers[ev.worker_id].status = 'dead';
-    renderWorkers();
-    addEvent(ev, 'red');
+    renderWorkers(); addEvent(ev, 'red');
   } else if (type === 'auto_failover') {
-    failovers++; setEl('m-failovers', failovers);
-    flashPipe('pipe-failover');
-    addEvent(ev, 'purple');
-    // Add replica to containers table
+    failovers++; setEl('m-failovers', failovers); flashPipe('pipe-failover'); addEvent(ev, 'purple');
     if (ev.replica_name) {
-      const rid = ev.replica_name;
-      containers[rid] = { container_id: rid, name: ev.replica_name, image: ev.image || '?', status: 'running', is_replica: true };
+      containers[ev.replica_name] = { container_id: ev.replica_name, name: ev.replica_name, image: ev.image||'?', status: 'running', is_replica: true };
       renderContainers();
     }
   } else if (type === 'scan_complete') {
-    flashPipe('pipe-scan');
-    addEvent(ev, 'green');
-    // 🚨 Correctly closed block below!
+    flashPipe('pipe-scan'); addEvent(ev, 'green');
     if (ev.container_id && containers[ev.container_id]) {
       containers[ev.container_id].vulnerabilities = ev.vulnerabilities;
       containers[ev.container_id].scan_status = ev.status;
       renderContainers();
     }
   } else if (type === 'standby_promoted') {
-    showFailoverBanner(ev);
-    addEvent(ev, 'red');
-  } else { 
-    addEvent(ev, 'blue'); 
-  }
+    showFailoverBanner(ev); addEvent(ev, 'red');
+  } else { addEvent(ev, 'blue'); }
 
   const running = Object.values(containers).filter(c => c.status === 'running').length;
   setEl('m-running', running);
   const crit = Object.values(containers).filter(c => c.is_critical).length;
   setEl('m-critical', crit);
-  const uptime = Math.floor((Date.now() - startTime) / 1000);
-  setEl('footer-stats', 'Events: ' + totalEvents + ' | Uptime: ' + uptime + 's');
 }
+
 // ── Render Containers ──────────────────────────────────────────────────────────
 function renderContainers() {
   const tbody = document.getElementById('container-tbody');
   const list = Object.values(containers);
-  setEl('container-count', list.length);
-  if (!list.length) { tbody.innerHTML = '<tr><td colspan="6" class="empty"><div class="empty-icon">🐳</div>No containers yet</td></tr>'; return; }
-  
+  setEl('container-count', list.length + ' containers');
+  setEl('tab-count-containers', list.length);
+  if (!list.length) {
+    tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="empty-state-icon">🐳</div><div class="empty-state-text">No containers yet</div></div></td></tr>';
+    return;
+  }
   tbody.innerHTML = list.map(c => {
-    const dc = c.status === 'running' ? 'dot-green' : c.status === 'dead' ? 'dot-red' : c.status === 'stopped' ? 'dot-amber' : 'dot-grey';
-    const crit = c.is_critical ? '<span class="tag tag-red">CRITICAL</span>' : '<span style="color:var(--muted);font-size:0.65rem">—</span>';
-    
-    // Format the Vulnerabilities Column
-    let vulnsHtml = '<span style="color:var(--muted);font-size:0.65rem">scanning...</span>';
+    const statusClass = c.status === 'running' ? 'pill-green' : c.status === 'dead' ? 'pill-red' : 'pill-amber';
+    const statusPill = '<span class="pill ' + statusClass + '"><span class="dot"></span>' + (c.status||'?') + '</span>';
+    const crit = c.is_critical ? '<span class="crit-tag">CRITICAL</span>' : '<span style="color:var(--muted2);">—</span>';
+    let vulnsHtml = '<span style="color:var(--muted2);font-size:0.78rem;">scanning...</span>';
     if (c.vulnerabilities) {
-        const critVuln = c.vulnerabilities.CRITICAL || 0;
-        const highVuln = c.vulnerabilities.HIGH || 0;
-        if (critVuln === 0 && highVuln === 0) {
-            vulnsHtml = '<span class="tag tag-green">0</span>';
-        } else {
-            vulnsHtml = '<span class="tag tag-red">' + critVuln + ' C</span> <span class="tag tag-amber">' + highVuln + ' H</span>';
-        }
-    } else if (c.scan_status === 'trivy_missing' || c.scan_status === 'scan_failed') {
-        vulnsHtml = '<span class="tag tag-red">Failed</span>';
+      const cv = c.vulnerabilities.CRITICAL || 0;
+      const hv = c.vulnerabilities.HIGH || 0;
+      vulnsHtml = cv === 0 && hv === 0
+        ? '<span class="vuln-badge vuln-ok">✓ Clean</span>'
+        : '<span class="vuln-badge vuln-c">' + cv + ' CRIT</span><span class="vuln-badge vuln-h">' + hv + ' HIGH</span>';
+    } else if (c.scan_status === 'scan_failed') {
+      vulnsHtml = '<span class="vuln-badge vuln-c">Failed</span>';
     }
-
-    // Notice the extra <td> for vulnsHtml!
-    return '<tr><td class="mono">' + (c.container_id||'').slice(0,12) + '</td><td>' + (c.name||c.container_name||'?') + '</td><td class="mono" style="color:var(--muted2)">' + trunc(c.image||c.image_name||'?',24) + '</td><td><span class="status-dot ' + dc + '"></span>' + (c.status||'?') + '</td><td>' + vulnsHtml + '</td><td>' + crit + '</td></tr>';
+    return '<tr><td class="mono">' + (c.container_id||'').slice(0,12) + '</td><td style="font-weight:500;">' + (c.name||c.container_name||'?') + (c.is_replica ? ' <span style="font-size:0.68rem;color:var(--purple);background:var(--purple-bg);padding:2px 7px;border-radius:4px;font-weight:600;">REPLICA</span>' : '') + '</td><td class="mono" style="color:var(--muted);">' + trunc(c.image||c.image_name||'?', 28) + '</td><td>' + statusPill + '</td><td>' + vulnsHtml + '</td><td>' + crit + '</td></tr>';
   }).join('');
 }
 
-// ── Render Workers ─────────────────────────────────────────────────────────────
+// ── Render Workers ──────────────────────────────────────────────────────────────
 function renderWorkers() {
   const grid = document.getElementById('worker-grid');
   const list = Object.values(workers);
   setEl('worker-count-tag', list.length + ' workers');
+  setEl('tab-count-workers', list.length);
   setEl('pipe-dispatch-sub', list.length + ' workers');
-  if (!list.length) { grid.innerHTML = '<div class="empty" style="grid-column:1/-1"><div class="empty-icon">⚙️</div>No workers registered</div>'; return; }
+  if (!list.length) { grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚙️</div><div class="empty-state-text">No workers registered</div></div>'; return; }
   grid.innerHTML = list.map(w => {
-    const id = w.worker_id || w, status = w.status || 'alive', load = w.load || 0;
-    const dc = status === 'alive' ? 'dot-green' : 'dot-red';
-    return '<div class="worker-card"><div class="worker-name"><span class="status-dot ' + dc + '"></span>' + id + '</div><div class="worker-stat">Status <span>' + status + '</span></div><div class="worker-stat">Load <span>' + load + '</span></div></div>';
+    const id = w.worker_id || w;
+    const status = w.status || 'alive';
+    const load = w.load || 0;
+    const done = w.jobs_completed || 0;
+    const isDead = status === 'dead';
+    return '<div class="worker-card' + (isDead ? ' dead' : '') + '">' +
+      '<div class="worker-id">' + id + '</div>' +
+      '<div class="worker-row"><span class="worker-row-label">Status</span><span class="pill ' + (isDead ? 'pill-red' : 'pill-green') + '" style="font-size:0.75rem;padding:3px 10px;"><span class="dot"></span>' + status + '</span></div>' +
+      '<div class="worker-row"><span class="worker-row-label">Current Load</span><span class="worker-row-val">' + load + '</span></div>' +
+      '<div class="worker-row"><span class="worker-row-label">Jobs Completed</span><span class="worker-row-val">' + done + '</span></div>' +
+      '</div>';
   }).join('');
 }
 
@@ -516,38 +800,50 @@ function renderAuditFromApi(entries) {
   const tbody = document.getElementById('audit-tbody');
   const recent = entries.slice(-50).reverse();
   setEl('audit-count-tag', entries.length + ' entries');
-  if (!recent.length) { tbody.innerHTML = '<tr><td colspan="5" class="empty">No audit entries yet</td></tr>'; return; }
+  setEl('tab-count-audit', entries.length);
+  if (!recent.length) { tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-state-text">No entries yet</div></div></td></tr>'; return; }
   tbody.innerHTML = recent.map(e => {
     const action = e.action || e.event_type || '?';
-    // Color anomalies red
-    const color = action.includes('anomaly') ? 'var(--red)' : action.includes('cache_hit') ? 'var(--cyan)' : action.includes('enqueued') ? 'var(--accent)' : action.includes('failover') ? 'var(--purple)' : action.includes('died') ? 'var(--red)' : 'var(--muted2)';
-    
-    // Check if it's an anomaly and display the log line, otherwise show job/hash
+    const color = action.includes('anomaly') ? 'var(--red)' : action.includes('cache_hit') ? 'var(--cyan)' : action.includes('enqueued') ? 'var(--accent)' : action.includes('failover') ? 'var(--purple)' : 'var(--muted)';
     let detail = '—';
-    if (e.log_line) { detail = trunc(e.log_line, 60); }
-    else if (e.job_id) { detail = 'job:' + e.job_id.slice(0,8); }
-    else if (e.layer_hash) { detail = 'hash:' + e.layer_hash.slice(0,8); }
-    
-    return '<tr><td class="mono" style="color:var(--muted)">' + fmtTime(e.timestamp||e.logged_at) + '</td><td class="mono" style="color:' + color + '">' + action + '</td><td class="mono">' + (e.container_id||'').slice(0,12) + '</td><td class="mono" style="color:var(--muted2)">' + trunc(e.image_name||'—',20) + '</td><td style="color:var(--muted);font-size:0.65rem">' + detail + '</td></tr>';
+    if (e.log_line) detail = trunc(e.log_line, 60);
+    else if (e.job_id) detail = 'job:' + e.job_id.slice(0,8);
+    else if (e.layer_hash) detail = 'hash:' + e.layer_hash.slice(0,8);
+    return '<tr><td class="mono" style="color:var(--muted);">' + fmtTime(e.timestamp||e.logged_at) + '</td><td class="mono" style="color:' + color + ';font-weight:500;">' + action + '</td><td class="mono">' + (e.container_id||'').slice(0,12) + '</td><td class="mono" style="color:var(--muted);">' + trunc(e.image_name||'—',20) + '</td><td style="font-size:0.78rem;color:var(--muted2);">' + detail + '</td></tr>';
   }).join('');
 }
+function clearAudit() { document.getElementById('audit-tbody').innerHTML = '<tr><td colspan="5"><div class="empty-state"><div class="empty-state-text">Cleared</div></div></td></tr>'; setEl('audit-count-tag','0 entries'); }
 
-function clearAudit() { document.getElementById('audit-tbody').innerHTML = '<tr><td colspan="5" class="empty">Cleared</td></tr>'; setEl('audit-count-tag','0 entries'); }
-
-// ── Live Event Feed ────────────────────────────────────────────────────────────
+// ── Live Events ─────────────────────────────────────────────────────────────────
 function addEvent(ev, color) {
   const list = document.getElementById('event-list');
-  const empty = list.querySelector('.empty');
-  if (empty) empty.parentElement.removeChild(empty);
-  const COLORS = { blue:['var(--accent)','rgba(59,130,246,0.08)'], green:['var(--green)','rgba(16,185,129,0.08)'], amber:['var(--amber)','rgba(245,158,11,0.08)'], red:['var(--red)','rgba(239,68,68,0.08)'], purple:['var(--purple)','rgba(139,92,246,0.08)'], cyan:['var(--cyan)','rgba(6,182,212,0.08)'] };
-  const [tc, bg] = COLORS[color] || COLORS.blue;
-  const type = ev.event_type || ev.type || 'event';
+  const empty = list.querySelector('.empty-state');
+  if (empty) list.removeChild(empty.closest('.empty-state') || empty);
+  const COLORS = {
+    blue:   ['var(--accent)',  'var(--accent-bg)',  '#2563eb33'],
+    green:  ['var(--green)',   'var(--green-bg)',   '#16a34a33'],
+    amber:  ['var(--amber)',   'var(--amber-bg)',   '#d9770633'],
+    red:    ['var(--red)',     'var(--red-bg)',     '#dc262633'],
+    purple: ['var(--purple)',  'var(--purple-bg)',  '#7c3aed33'],
+    cyan:   ['var(--cyan)',    'var(--cyan-bg)',    '#0891b233'],
+  };
+  const [tc, bg, border] = COLORS[color] || COLORS.blue;
+  const type = ev.event_type || 'event';
   const div = document.createElement('div');
-  div.className = 'event-item';
-  div.style.background = bg; div.style.borderColor = tc + '33';
-  div.innerHTML = '<div class="event-time">' + fmtTime(ev.timestamp) + '</div><div class="event-body"><div class="event-type" style="color:' + tc + '">' + type.toUpperCase() + '</div><div class="event-detail">' + (ev.container_name||ev.container_id||'') + (ev.image_name ? ' · ' + trunc(ev.image_name,30) : '') + '</div></div>';
+  div.className = 'event-row';
+  div.style.background = bg; div.style.borderColor = border;
+  const badge = document.createElement('span');
+  badge.className = 'event-type-badge';
+  badge.style.background = border; badge.style.color = tc;
+  badge.textContent = type.toUpperCase();
+  const detail = document.createElement('div');
+  detail.className = 'event-detail-text';
+  detail.textContent = (ev.container_name||ev.container_id||'') + (ev.image_name ? ' · ' + trunc(ev.image_name, 32) : '');
+  const time = document.createElement('span');
+  time.className = 'event-time'; time.textContent = fmtTime(ev.timestamp);
+  div.appendChild(time); div.appendChild(badge); div.appendChild(detail);
   list.insertBefore(div, list.firstChild);
-  while (list.children.length > 40) list.removeChild(list.lastChild);
+  while (list.children.length > 50) list.removeChild(list.lastChild);
 }
 
 // ── Cache ──────────────────────────────────────────────────────────────────────
