@@ -1,7 +1,7 @@
 # 🛡️ Resilient Container Security & Compliance Engine
 
 > **Advanced Operating Systems Project** — Texas A&M University–Corpus Christi  
-> **Team:** Code Gems &nbsp;|&nbsp; **Course:** CSCE 5331 Advanced Operating Systems  
+> **Team:** Code Gems &nbsp;|&nbsp; **Course:** COSC-6352-001 Advanced Operating Systems  
 > **Members:** Manmeet Detroja · Margesh Vyas · Mahip Patel
 
 ---
