@@ -80,7 +80,25 @@ class StateStore:
         with self._lock:
             return list(self._workers.values())
 
-    # ── Queue depth ────────────────────────────────────────────────────────────
+    def remove_worker(self, worker_id: str):
+        """Permanently delete a worker record — used on scheduler restart cleanup."""
+        with self._lock:
+            self._workers.pop(worker_id, None)
+        self.save_to_disk()
+
+    def clear_all_workers(self):
+        """
+        Delete ALL worker records from state.
+        Called on control plane startup so ghost workers from previous
+        scheduler sessions never accumulate in the dashboard.
+        """
+        with self._lock:
+            count = len(self._workers)
+            self._workers = {}
+        self.save_to_disk()
+        return count
+
+    # ── Queue depth ────────────────────────────────────────────────────────────────────────────
 
     def set_queue_depth(self, depth):
         with self._lock:

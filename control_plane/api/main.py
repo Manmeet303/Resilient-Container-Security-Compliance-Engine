@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+import httpx
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
@@ -34,10 +35,44 @@ async def lifespan(app: FastAPI):
         })
     logger.info("StateStore: cleared stale workers from previous session.")
 
-    listener_task = asyncio.create_task(docker_listener.listen())
+    listener_task  = asyncio.create_task(docker_listener.listen())
+    poller_task    = asyncio.create_task(_poll_scheduler_queue_depth())
     yield
     logger.info("Shutting down Control Plane...")
     listener_task.cancel()
+    poller_task.cancel()
+
+
+SCHEDULER_URL = "http://localhost:9010"
+
+
+async def _poll_scheduler_queue_depth():
+    """
+    Poll scheduler /health every 2s and push queue depth to StateStore + dashboard.
+    This is the reliable source of truth — the scheduler owns the queue (Redis),
+    so we ask it directly rather than maintaining a local counter that drifts.
+    """
+    async with httpx.AsyncClient() as client:
+        while True:
+            try:
+                resp = await client.get(f"{SCHEDULER_URL}/health", timeout=2.0)
+                if resp.status_code == 200:
+                    data  = resp.json()
+                    queue = data.get("queue", {})
+                    # Support both old (queue_depth int) and new (queue dict) health formats
+                    if isinstance(queue, dict):
+                        depth = queue.get("pending", 0) + queue.get("inflight", 0)
+                    else:
+                        depth = data.get("queue_depth", 0)
+
+                    state_store.set_queue_depth(depth)
+                    await ws_manager.broadcast({
+                        "event_type":  "queue_depth_update",
+                        "queue_depth": depth,
+                    })
+            except Exception:
+                pass   # scheduler not up yet — silently retry
+            await asyncio.sleep(2)
 
 app = FastAPI(
     title="Resilient Container Security Engine",
@@ -55,10 +90,26 @@ async def health():
 
 @app.get("/status")
 async def status():
+    # Fetch queue depth live from scheduler — source of truth
+    # Falls back to state_store value if scheduler is unreachable
+    queue_depth = state_store.queue_depth()
+    try:
+        async with httpx.AsyncClient() as client:
+            r = await client.get(f"{SCHEDULER_URL}/health", timeout=1.0)
+            if r.status_code == 200:
+                data  = r.json()
+                queue = data.get("queue", {})
+                if isinstance(queue, dict):
+                    queue_depth = queue.get("pending", 0) + queue.get("inflight", 0)
+                else:
+                    queue_depth = data.get("queue_depth", 0)
+                state_store.set_queue_depth(queue_depth)
+    except Exception:
+        pass
     return {
         "containers":       state_store.get_all_containers(),
         "workers":          state_store.get_all_workers(),
-        "scan_queue_depth": state_store.queue_depth(),
+        "scan_queue_depth": queue_depth,
     }
 
 
@@ -159,6 +210,21 @@ async def scan_complete(data: Dict[str, Any]):
         "timestamp":       data.get("timestamp"),
     })
     return {"status": "ok"}
+
+
+@app.post("/internal/queue/depth")
+async def update_queue_depth(data: Dict[str, Any]):
+    """
+    Scheduler calls this after every enqueue and job completion
+    so the dashboard queue counter updates in real-time.
+    """
+    depth = data.get("depth", 0)
+    state_store.set_queue_depth(depth)
+    await ws_manager.broadcast({
+        "event_type":  "queue_depth_update",
+        "queue_depth": depth,
+    })
+    return {"status": "ok", "depth": depth}
 
 
 # ── WebSocket + Dashboard ──────────────────────────────────────────────────────

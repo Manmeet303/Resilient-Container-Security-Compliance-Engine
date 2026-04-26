@@ -84,6 +84,9 @@ class Dispatcher:
             # Notify control plane — dashboard shows scan_complete in live feed
             await self._notify_scan_complete(result, job)
 
+            # Push updated queue depth so dashboard counter drops in real-time
+            await self._notify_queue_depth()
+
         except Exception as exc:
             logger.error(f"Worker {worker_id[:8]} failed job {job['job_id'][:8]}: {exc}")
             await self.queue.requeue(job)
@@ -91,6 +94,29 @@ class Dispatcher:
         finally:
             current_load = self.registry.workers.get(worker_id, {}).get("load", 1)
             self.registry.update_load(worker_id, max(0, current_load - 1))
+
+    async def _notify_queue_depth(self):
+        """Tell control plane the current queue depth after each job completes."""
+        try:
+            pending  = self.queue._queue.qsize() if hasattr(self.queue, '_queue') else 0
+            inflight = len(self.queue._in_flight) if hasattr(self.queue, '_in_flight') else 0
+            # Redis queue — use async stats
+            if hasattr(self.queue, 'stats'):
+                try:
+                    stats    = await self.queue.stats()
+                    pending  = stats.get("pending", 0)
+                    inflight = stats.get("inflight", 0)
+                except Exception:
+                    pass
+            depth = pending + inflight
+            async with httpx.AsyncClient() as client:
+                await client.post(
+                    f"{CONTROL_PLANE_URL}/internal/queue/depth",
+                    json={"depth": depth},
+                    timeout=1.0,
+                )
+        except Exception:
+            pass
 
     async def _notify_scan_complete(self, result: dict, job: dict):
         """POST scan completion to control plane so dashboard live feed updates."""
