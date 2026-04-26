@@ -6,9 +6,9 @@ from cache.cache_common import LayerScanCache
 
 app = FastAPI(title="Distributed Cache Node")
 
-CACHE_CAPACITY   = int(os.getenv("CACHE_CAPACITY",   "1000"))
+CACHE_CAPACITY    = int(os.getenv("CACHE_CAPACITY",   "1000"))
 CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "3600"))
-NODE_ID          = os.getenv("NODE_ID", "cache-node-1")
+NODE_ID           = os.getenv("NODE_ID", "cache-node-1")
 
 cache = LayerScanCache(capacity=CACHE_CAPACITY, ttl_seconds=CACHE_TTL_SECONDS)
 
@@ -27,7 +27,39 @@ class CacheGetResponse(BaseModel):
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "node_id": NODE_ID, "cache_stats": cache.stats()}
+    return {
+        "status":      "ok",
+        "node_id":     NODE_ID,
+        "cache_stats": cache.stats(),
+    }
+
+
+@app.get("/stats")
+def stats():
+    """
+    Detailed cache stats endpoint — wired to the dashboard Cache tab.
+    Returns entry count, capacity, TTL, and hit/miss counters from the LRU.
+    The /health endpoint only returns a summary; this one is used by the UI
+    to show live entries and capacity fill %.
+    """
+    base = cache.stats()           # entries, ttl_seconds, capacity
+    lru  = cache.lru               # LRUCache instance
+
+    hits   = getattr(lru, "hits",   0)
+    misses = getattr(lru, "misses", 0)
+    total  = hits + misses
+
+    return {
+        "node_id":       NODE_ID,
+        "entries":       base["entries"],
+        "capacity":      base["capacity"],
+        "fill_pct":      round(base["entries"] / base["capacity"] * 100, 1),
+        "ttl_seconds":   base["ttl_seconds"],
+        "lru_hits":      hits,
+        "lru_misses":    misses,
+        "lru_hit_ratio": round(hits / total, 3) if total > 0 else 0.0,
+        "keys":          lru.keys(),     # list of current layer_hash keys
+    }
 
 
 @app.get("/cache/{layer_hash}", response_model=CacheGetResponse)
@@ -41,7 +73,12 @@ def get_cache(layer_hash: str):
 @app.post("/cache")
 def put_cache(request: CachePutRequest):
     cache.put(request.layer_hash, request.scan_result)
-    return {"status": "stored", "layer_hash": request.layer_hash, "node_id": NODE_ID, "cache_stats": cache.stats()}
+    return {
+        "status":      "stored",
+        "layer_hash":  request.layer_hash,
+        "node_id":     NODE_ID,
+        "cache_stats": cache.stats(),
+    }
 
 
 @app.delete("/cache/{layer_hash}")

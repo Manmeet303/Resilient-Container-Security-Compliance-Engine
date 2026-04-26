@@ -8,8 +8,8 @@ from shared.utils.logger import get_logger
 
 logger = get_logger("scheduler.dispatcher")
 
-CACHE_NODES       = ["http://localhost:8001"]
-CONTROL_PLANE_URL = "http://localhost:8000"
+CACHE_NODES       = ["http://localhost:9001"]
+CONTROL_PLANE_URL = "http://localhost:9000"
 
 
 class Dispatcher:
@@ -67,7 +67,7 @@ class Dispatcher:
             try:
                 async with httpx.AsyncClient() as cache_http:
                     cache_resp = await cache_http.post(
-                        f"http://localhost:8001/cache",
+                        f"http://localhost:9001/cache",
                         json={"layer_hash": layer_hash, "scan_result": result},
                         timeout=3.0,
                     )

@@ -15,8 +15,8 @@ def mock_trivy_scan(layer_hash: str) -> dict:
 
 def main():
     cache_nodes = [
-        "http://localhost:8001",
-        "http://localhost:8002",
+        "http://localhost:9001",
+        "http://localhost:9002",
     ]
 
     cache_client = DistributedCacheClient(cache_nodes)
