@@ -550,7 +550,7 @@ tbody tr:hover td { background: var(--bg); }
         </div>
         <div class="cache-stat-row">
           <span class="cache-stat-label">Cache Node</span>
-          <span class="cache-stat-val" id="cache-node-val" style="font-size:0.85rem;color:var(--muted);">cache-node-1:9001</span>
+          <span class="cache-stat-val" id="cache-node-val" style="font-size:0.85rem;color:var(--muted);">cache-node-1:8001</span>
         </div>
         <div class="hit-rate-bar">
           <div style="font-size:0.78rem;color:var(--muted);font-weight:500;">Hit Rate</div>
@@ -564,7 +564,7 @@ tbody tr:hover td { background: var(--bg); }
       </div>
       <div class="card-body padded" style="font-size:0.85rem;line-height:1.8;color:var(--text2);">
         <p><strong>1. Container starts</strong> → SHA-256 hash computed for image layer</p>
-        <p style="margin-top:12px;"><strong>2. Cache check</strong> → Query distributed cache node on port 9001</p>
+        <p style="margin-top:12px;"><strong>2. Cache check</strong> → Query distributed cache node on port 8001</p>
         <p style="margin-top:12px;"><strong>3a. Cache HIT</strong> → Vulnerability data returned instantly, <span style="color:var(--green);font-weight:600;">no Trivy scan needed</span></p>
         <p style="margin-top:12px;"><strong>3b. Cache MISS</strong> → Job enqueued, Trivy scans image, result stored in cache for future hits</p>
         <p style="margin-top:12px;"><strong>Algorithm</strong> → Consistent hashing ring with LRU eviction and 1-hour TTL</p>
@@ -606,6 +606,7 @@ tbody tr:hover td { background: var(--bg); }
 // ── State ──────────────────────────────────────────────────────────────────────
 let ws = null, events = [], containers = {}, workers = {}, auditLog = [];
 let cacheHits = 0, cacheMisses = 0, failovers = 0, totalEvents = 0;
+let wsQueueDepthReceived = false;  // true once first WS queue_depth_update arrives
 let startTime = Date.now(), reconnectTimer = null;
 let activeTab = 'containers';
 
@@ -659,7 +660,7 @@ function connect() {
   ws.onclose = () => {
     document.getElementById('conn-dot').className = 'conn-dot';
     document.getElementById('conn-label').textContent = 'RECONNECTING...';
-    if (location.port === '9000') reconnectTimer = setTimeout(checkStandbyAndRedirect, 3000);
+    if (location.port === '8000') reconnectTimer = setTimeout(checkStandbyAndRedirect, 3000);
     else reconnectTimer = setTimeout(connect, 3000);
   };
   ws.onerror = () => ws.close();
@@ -681,7 +682,10 @@ async function pollStatus() {
     const s = await fetch('/status').then(r => r.json());
     if (s.containers) { containers = {}; s.containers.forEach(c => containers[c.container_id] = c); renderContainers(); }
     if (s.workers)    { workers = {};    s.workers.forEach(w => workers[w.worker_id || w] = w);     renderWorkers(); }
-    if (s.scan_queue_depth !== undefined) {
+    // Queue depth comes from WebSocket push (queue_depth_update event)
+    // which fires on every enqueue/complete — much faster than this 5s poll.
+    // Only use /status value as fallback if no WS update has arrived yet.
+    if (s.scan_queue_depth !== undefined && !wsQueueDepthReceived) {
       setEl('m-queue', s.scan_queue_depth);
       setEl('queue-tag', s.scan_queue_depth + ' pending');
       setEl('pipe-queue-sub', s.scan_queue_depth + ' jobs');
@@ -758,6 +762,13 @@ function handleEvent(ev) {
     }
   } else if (type === 'standby_promoted') {
     showFailoverBanner(ev); addEvent(ev, 'red');
+  } else if (type === 'queue_depth_update') {
+    const d = ev.queue_depth !== undefined ? ev.queue_depth : 0;
+    wsQueueDepthReceived = true;
+    setEl('m-queue', d);
+    setEl('queue-tag', d + ' pending');
+    setEl('pipe-queue-sub', d + ' jobs');
+    if (d > 0) flashPipe('pipe-queue');
   } else { addEvent(ev, 'blue'); }
 
   const running = Object.values(containers).filter(c => c.status === 'running').length;
