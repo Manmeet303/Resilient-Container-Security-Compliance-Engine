@@ -1,12 +1,12 @@
 """
 Standby Master Node — Active-Passive Failover
 =============================================
-Run on port 8080:
-    uvicorn control_plane.api.standby:app --port 8080 --reload
+Run on port 9090:
+    uvicorn control_plane.api.standby:app --port 9090 --reload
 
 Behaviour:
 - Starts in STANDBY mode — read-only, no Docker listener
-- Every 2s pings primary /health (port 8000)
+- Every 2s pings primary /health (port 9000)
 - Every 5s mirrors full state from primary /status + /audit-log
 - After 3 consecutive health failures → promotes itself to PRIMARY
 - Once promoted: starts Docker listener, accepts all write requests,
@@ -32,7 +32,7 @@ from shared.utils.logger import get_logger
 logger = get_logger("control_plane.standby")
 
 # ── Config ────────────────────────────────────────────────────────────────────
-PRIMARY_URL           = "http://localhost:8000"
+PRIMARY_URL           = "http://localhost:9000"
 HEALTH_CHECK_INTERVAL = 2    # seconds between health pings
 STATE_SYNC_INTERVAL   = 5    # seconds between full state mirrors
 FAILURE_THRESHOLD     = 3    # consecutive failures before promoting
@@ -70,11 +70,11 @@ async def promote_to_primary():
     asyncio.create_task(docker_listener.listen())
 
     # Notify all dashboard WebSocket clients — includes redirect URL
-    # so the dashboard auto-redirects to port 8080 after promotion
+    # so the dashboard auto-redirects to port 9090 after promotion
     await ws_manager.broadcast({
         "event_type":  "standby_promoted",
         "message":     "Standby master promoted to primary — taking over!",
-        "redirect_url": "http://localhost:8080",
+        "redirect_url": "http://localhost:9090",
         "promoted_at": promoted_at,
         "timestamp":   promoted_at,
     })
@@ -179,7 +179,7 @@ async def state_mirror_loop():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Standby master node starting on port 8080...")
+    logger.info("Standby master node starting on port 9090...")
     logger.info(f"Watching primary at {PRIMARY_URL}")
     logger.info(f"Will promote after {FAILURE_THRESHOLD} consecutive failures")
     asyncio.create_task(health_check_loop())

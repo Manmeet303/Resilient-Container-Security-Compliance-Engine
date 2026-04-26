@@ -7,7 +7,7 @@ from shared.utils.logger import get_logger
 
 logger = get_logger("scheduler.heartbeat")
 
-CONTROL_PLANE_URL = "http://localhost:8000"
+CONTROL_PLANE_URL = "http://localhost:9000"
 
 
 class HeartbeatMonitor:

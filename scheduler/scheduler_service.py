@@ -62,11 +62,11 @@ class SchedulerService:
         asyncio.create_task(self.dispatcher.dispatch_loop())
         logger.info("Scheduler heartbeat monitor and dispatcher running.")
 
-        # Run HTTP server on port 8010 alongside the scheduler
+        # Run HTTP server on port 9010 alongside the scheduler
         config = uvicorn.Config(
             self.app,
             host="0.0.0.0",
-            port=8010,
+            port=9010,
             log_level="warning",   # suppress uvicorn noise
         )
         server = uvicorn.Server(config)

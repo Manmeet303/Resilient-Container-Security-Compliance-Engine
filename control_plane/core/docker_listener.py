@@ -15,9 +15,9 @@ logger = get_logger("control_plane.docker_listener")
 WATCHED_EVENTS = {"start", "die", "stop", "kill"}
 
 # Only include cache nodes that are actually running
-# Remove 8002 if you're only running one cache node
+# Remove 9002 if you're only running one cache node
 CACHE_NODES = [
-    "http://localhost:8001",
+    "http://localhost:9001",
 ]
 
 
@@ -27,7 +27,7 @@ class DockerEventListener:
         self.state_store       = state_store
         self.resilience_engine = resilience_engine
         self.ws_manager        = ws_manager
-        self.scheduler_url     = 'http://localhost:8010'
+        self.scheduler_url     = 'http://localhost:9010'
         self.cache_client      = DistributedCacheClient(CACHE_NODES)
         self.log_monitor       = LogMonitor(state_store, ws_manager)
 
@@ -109,7 +109,7 @@ class DockerEventListener:
                 try:
                     async with httpx.AsyncClient() as cache_http:
                         cr = await cache_http.get(
-                            f"http://localhost:8001/cache/{layer_hash}",
+                            f"http://localhost:9001/cache/{layer_hash}",
                             timeout=2.0,
                         )
                         cache_response = cr.json()
@@ -118,29 +118,54 @@ class DockerEventListener:
 
                 if cache_response.get("hit"):
                     # ── CACHE HIT ──────────────────────────────────────────────
-                    node_id = cache_response.get("node_id", "cache-node-1")
+                    node_id     = cache_response.get("node_id", "cache-node-1")
+                    scan_result = cache_response.get("scan_result") or {}
+                    vulns       = scan_result.get("vulnerabilities", {})
+
                     logger.info(
                         f"Cache HIT for {image_name} "
                         f"(hash={layer_hash[:16]}...) on node {node_id}"
                     )
+
                     # Record hit in state_store for Cache Performance panel
                     self.state_store.record_cache_event(hit=True)
+
+                    # ── FIX: propagate vuln data so container row resolves ──────
+                    # Without this the Vulnerabilities column shows "scanning..."
+                    # forever because no scan_complete event is ever fired on HITs.
+                    self.state_store.upsert_container(container_id, {
+                        "vulnerabilities": vulns,
+                        "scan_status":     "cache_hit",
+                    })
 
                     self.state_store.append_audit({
                         **event_payload,
                         "action":        "cache_hit",
                         "layer_hash":    layer_hash,
-                        "cached_result": cache_response.get("scan_result"),
+                        "cached_result": scan_result,
                     })
 
-                    # Broadcast so dashboard Cache Hits counter increments live
+                    # Broadcast cache_hit (increments counter in UI)
                     await self.ws_manager.broadcast({
-                        "event_type":   "cache_hit",
-                        "container_id": container_id,
-                        "image_name":   image_name,
-                        "layer_hash":   layer_hash,
-                        "node_id":      node_id,
-                        "timestamp":    event_payload["timestamp"],
+                        "event_type":      "cache_hit",
+                        "container_id":    container_id,
+                        "image_name":      image_name,
+                        "layer_hash":      layer_hash,
+                        "node_id":         node_id,
+                        "timestamp":       event_payload["timestamp"],
+                    })
+
+                    # ── FIX: also fire scan_complete so container row updates ───
+                    # The dashboard's scan_complete handler updates the vuln column.
+                    # Re-using that same event means zero extra UI code needed.
+                    await self.ws_manager.broadcast({
+                        "event_type":      "scan_complete",
+                        "container_id":    container_id,
+                        "image_name":      image_name,
+                        "vulnerabilities": vulns,
+                        "status":          "cache_hit",
+                        "elapsed_ms":      0,
+                        "timestamp":       event_payload["timestamp"],
                     })
 
                 else:
@@ -194,8 +219,9 @@ class DockerEventListener:
 
         # ── Broadcast Docker event to dashboard ────────────────────────────────
         await self.ws_manager.broadcast(event_payload)
+
     async def _push_job_to_scheduler(self, container_id, layer_hash, image_name):
-        """Push scan job to scheduler process via HTTP on port 8010."""
+        """Push scan job to scheduler process via HTTP on port 9010."""
         try:
             async with httpx.AsyncClient() as client:
                 resp = await client.post(

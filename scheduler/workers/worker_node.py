@@ -9,7 +9,7 @@ from shared.utils.logger import get_logger
 
 logger = get_logger("scheduler.worker")
 
-CONTROL_PLANE_URL = "http://localhost:8000"
+CONTROL_PLANE_URL = "http://localhost:9000"
 
 
 class WorkerNode:
