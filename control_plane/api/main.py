@@ -168,10 +168,13 @@ async def audit_log():
 # ── IPC endpoints called by Scheduler ──────────────────────────────────────────
 
 class WorkerHeartbeat(BaseModel):
-    worker_id: str
-    status: str = "alive"
-    load: int = 0
-    jobs_completed: int = 0
+    worker_id:        str
+    status:           str = "alive"
+    load:             int = 0
+    jobs_completed:   int = 0
+    jobs_assigned:    int = 0
+    events_assigned:  int = 0
+    events_completed: int = 0
 
 
 @app.post("/internal/workers/heartbeat")
@@ -184,18 +187,24 @@ async def worker_heartbeat(data: WorkerHeartbeat):
     Dashboard updates green alive status.
     """
     state_store.upsert_worker(data.worker_id, {
-        "worker_id": data.worker_id,
-        "status": data.status,
-        "load": data.load,
-        "jobs_completed": data.jobs_completed,
+        "worker_id":        data.worker_id,
+        "status":           data.status,
+        "load":             data.load,
+        "jobs_completed":   data.jobs_completed,
+        "jobs_assigned":    data.jobs_assigned,
+        "events_assigned":  data.events_assigned,
+        "events_completed": data.events_completed,
     })
 
     await ws_manager.broadcast({
-        "event_type": "worker_update",
-        "worker_id": data.worker_id,
-        "status": data.status,
-        "load": data.load,
-        "jobs_completed": data.jobs_completed,
+        "event_type":       "worker_update",
+        "worker_id":        data.worker_id,
+        "status":           data.status,
+        "load":             data.load,
+        "jobs_completed":   data.jobs_completed,
+        "jobs_assigned":    data.jobs_assigned,
+        "events_assigned":  data.events_assigned,
+        "events_completed": data.events_completed,
     })
 
     return {
