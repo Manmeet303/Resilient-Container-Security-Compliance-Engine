@@ -1,0 +1,358 @@
+{
+  "containers": {
+    "54f8c2b28d77": {
+      "container_id": "54f8c2b28d77",
+      "name": "test-nginx",
+      "image": "nginx",
+      "status": "running",
+      "updated_at": "2026-04-28T01:55:19.144823",
+      "vulnerabilities": {
+        "CRITICAL": 2,
+        "HIGH": 5,
+        "MEDIUM": 9,
+        "LOW": 28
+      },
+      "scan_status": "mock_scan_complete",
+      "is_critical": true
+    },
+    "e633e1b5f426": {
+      "container_id": "e633e1b5f426",
+      "name": "test-nginx-replica-54f8c2",
+      "image": "nginx",
+      "status": "dead",
+      "updated_at": "2026-04-28T01:55:54.875937",
+      "is_replica": true,
+      "original_id": "54f8c2b28d77",
+      "is_critical": true,
+      "vulnerabilities": {
+        "CRITICAL": 1,
+        "HIGH": 2,
+        "MEDIUM": 6,
+        "LOW": 10
+      },
+      "scan_status": "cache_hit"
+    },
+    "72241da811a8": {
+      "container_id": "72241da811a8",
+      "name": "test-nginx-replica-54f8c2-replica-e633e1",
+      "image": "nginx",
+      "status": "running",
+      "updated_at": "2026-04-28T01:55:56.266741",
+      "is_replica": true,
+      "original_id": "e633e1b5f426",
+      "is_critical": true,
+      "vulnerabilities": {
+        "CRITICAL": 2,
+        "HIGH": 5,
+        "MEDIUM": 9,
+        "LOW": 28
+      },
+      "scan_status": "cache_hit"
+    },
+    "ca4e4fb32089": {
+      "container_id": "ca4e4fb32089",
+      "name": "test-nginx",
+      "image": "nginx",
+      "status": "dead",
+      "updated_at": "2026-04-28T02:21:57.689435",
+      "vulnerabilities": {
+        "CRITICAL": 0,
+        "HIGH": 7,
+        "MEDIUM": 5,
+        "LOW": 18
+      },
+      "scan_status": "mock_scan_complete"
+    },
+    "f88fd372a320": {
+      "container_id": "f88fd372a320",
+      "name": "test-nginx",
+      "image": "nginx",
+      "status": "running",
+      "updated_at": "2026-04-28T02:31:31.431734",
+      "vulnerabilities": {
+        "CRITICAL": 0,
+        "HIGH": 1,
+        "MEDIUM": 4,
+        "LOW": 27
+      },
+      "scan_status": "cache_hit"
+    }
+  },
+  "workers": {
+    "5584e456-3f95-4b51-a3e3-91c714342360": {
+      "worker_id": "5584e456-3f95-4b51-a3e3-91c714342360",
+      "status": "dead",
+      "load": 0,
+      "jobs_completed": 0,
+      "last_seen": "2026-04-28T05:16:02.773624"
+    },
+    "05aa497a-8e26-42a9-a51f-a8c891108d41": {
+      "worker_id": "05aa497a-8e26-42a9-a51f-a8c891108d41",
+      "status": "alive",
+      "load": 0,
+      "jobs_completed": 0,
+      "last_seen": "2026-04-28T05:16:02.775020"
+    },
+    "2f09b3f6-2abe-4d03-9883-ab2f3ba4f919": {
+      "worker_id": "2f09b3f6-2abe-4d03-9883-ab2f3ba4f919",
+      "status": "alive",
+      "load": 0,
+      "jobs_completed": 0,
+      "last_seen": "2026-04-28T05:15:59.956765"
+    }
+  },
+  "critical_containers": [
+    "72241da811a8",
+    "54f8c2b28d77",
+    "e633e1b5f426"
+  ],
+  "audit_log": [
+    {
+      "event_id": "5e6bf476-59b6-4b48-8780-cdbd63aadd85",
+      "event_type": "container_start",
+      "container_id": "54f8c2b28d77",
+      "container_name": "test-nginx",
+      "image_name": "nginx",
+      "timestamp": "2026-04-28T01:21:03.445705",
+      "action": "scan_enqueued",
+      "job_id": "16b71076-9736-4ed5-83be-723c23ed86c2",
+      "layer_hash": "653bc09ee38cff31b902e73d12c7e9e30facc30fa81e88ae473cd3a5abf379e0",
+      "logged_at": "2026-04-28T01:21:05.855374"
+    },
+    {
+      "event_id": "34842914-b5f3-4800-959e-a0de7ea94b8e",
+      "event_type": "container_kill",
+      "container_id": "54f8c2b28d77",
+      "container_name": "test-nginx",
+      "image_name": "nginx",
+      "timestamp": "2026-04-28T01:22:57.842330",
+      "action": "container_stopped",
+      "logged_at": "2026-04-28T01:22:57.843468"
+    },
+    {
+      "event_id": "969c9717-1f9c-450d-8aef-b90b3833ab4f",
+      "event_type": "container_stop",
+      "container_id": "54f8c2b28d77",
+      "container_name": "test-nginx",
+      "image_name": "nginx",
+      "timestamp": "2026-04-28T01:22:58.090914",
+      "action": "container_stopped",
+      "logged_at": "2026-04-28T01:22:58.092168"
+    },
+    {
+      "event_id": "f85f3305-2ba1-4995-b9c0-12d747e82e5b",
+      "event_type": "container_die",
+      "container_id": "54f8c2b28d77",
+      "container_name": "test-nginx",
+      "image_name": "nginx",
+      "timestamp": "2026-04-28T01:22:58.100870",
+      "action": "container_stopped",
+      "logged_at": "2026-04-28T01:22:58.101971"
+    },
+    {
+      "event_type": "auto_failover",
+      "original_container": "54f8c2b28d77",
+      "replica_name": "test-nginx-replica-54f8c2",
+      "image": "nginx",
+      "status": "recovered",
+      "latency_ms": 1216.4,
+      "timestamp": "2026-04-28T01:22:59.320876",
+      "logged_at": "2026-04-28T01:22:59.320876"
+    },
+    {
+      "event_id": "7df5e084-fbe5-46a7-ae66-8d685fa9286c",
+      "event_type": "container_start",
+      "container_id": "e633e1b5f426",
+      "container_name": "test-nginx-replica-54f8c2",
+      "image_name": "nginx",
+      "timestamp": "2026-04-28T01:22:58.411064",
+      "action": "cache_hit",
+      "layer_hash": "653bc09ee38cff31b902e73d12c7e9e30facc30fa81e88ae473cd3a5abf379e0",
+      "cached_result": {
+        "status": "mock_scan_complete",
+        "worker_id": "da8b5970-d369-40ab-9695-c66b0dd3236c",
+        "job_id": "16b71076-9736-4ed5-83be-723c23ed86c2",
+        "image_name": "nginx",
+        "vulnerabilities": {
+          "CRITICAL": 1,
+          "HIGH": 2,
+          "MEDIUM": 6,
+          "LOW": 10
+        },
+        "timestamp": "2026-04-28T01:21:07.889940",
+        "elapsed_ms": 2036.6
+      },
+      "logged_at": "2026-04-28T01:22:59.371379"
+    },
+    {
+      "event_id": "970d9e59-6a5f-4ad4-b219-eb4186cf7575",
+      "event_type": "container_start",
+      "container_id": "54f8c2b28d77",
+      "container_name": "test-nginx",
+      "image_name": "nginx",
+      "timestamp": "2026-04-28T01:55:11.260484",
+      "action": "scan_enqueued",
+      "job_id": "b1a0866e-256f-4fca-a9c1-09a09c7a5648",
+      "layer_hash": "653bc09ee38cff31b902e73d12c7e9e30facc30fa81e88ae473cd3a5abf379e0",
+      "logged_at": "2026-04-28T01:55:14.305169"
+    },
+    {
+      "event_id": "31900249-7169-4e42-8015-fd35e92f6ef7",
+      "event_type": "container_kill",
+      "container_id": "e633e1b5f426",
+      "container_name": "test-nginx-replica-54f8c2",
+      "image_name": "nginx",
+      "timestamp": "2026-04-28T01:55:54.609907",
+      "action": "container_stopped",
+      "logged_at": "2026-04-28T01:55:54.611191"
+    },
+    {
+      "event_id": "4048cfae-dd97-4520-90cc-a809dca176af",
+      "event_type": "container_stop",
+      "container_id": "e633e1b5f426",
+      "container_name": "test-nginx-replica-54f8c2",
+      "image_name": "nginx",
+      "timestamp": "2026-04-28T01:55:54.864060",
+      "action": "container_stopped",
+      "logged_at": "2026-04-28T01:55:54.865759"
+    },
+    {
+      "event_id": "b6f0b4e4-ccc3-4c61-8921-4bb419632a0f",
+      "event_type": "container_die",
+      "container_id": "e633e1b5f426",
+      "container_name": "test-nginx-replica-54f8c2",
+      "image_name": "nginx",
+      "timestamp": "2026-04-28T01:55:54.875342",
+      "action": "container_stopped",
+      "logged_at": "2026-04-28T01:55:54.879246"
+    },
+    {
+      "event_type": "auto_failover",
+      "original_container": "e633e1b5f426",
+      "replica_name": "test-nginx-replica-54f8c2-replica-e633e1",
+      "image": "nginx",
+      "status": "recovered",
+      "latency_ms": 1310.1,
+      "timestamp": "2026-04-28T01:55:56.192434",
+      "logged_at": "2026-04-28T01:55:56.192434"
+    },
+    {
+      "event_id": "76199a11-0d90-4748-b27d-e849da053269",
+      "event_type": "container_start",
+      "container_id": "72241da811a8",
+      "container_name": "test-nginx-replica-54f8c2-replica-e633e1",
+      "image_name": "nginx",
+      "timestamp": "2026-04-28T01:55:55.214188",
+      "action": "cache_hit",
+      "layer_hash": "653bc09ee38cff31b902e73d12c7e9e30facc30fa81e88ae473cd3a5abf379e0",
+      "cached_result": {
+        "status": "mock_scan_complete",
+        "worker_id": "c6328bd8-f1bd-4769-a1b0-7653b748bd88",
+        "job_id": "b1a0866e-256f-4fca-a9c1-09a09c7a5648",
+        "image_name": "nginx",
+        "vulnerabilities": {
+          "CRITICAL": 2,
+          "HIGH": 5,
+          "MEDIUM": 9,
+          "LOW": 28
+        },
+        "timestamp": "2026-04-28T01:55:16.717841",
+        "elapsed_ms": 2055.3
+      },
+      "logged_at": "2026-04-28T01:55:56.268742"
+    },
+    {
+      "event_id": "e0432091-4eb5-49b6-ac64-b09c61b80ed0",
+      "event_type": "container_start",
+      "container_id": "ca4e4fb32089",
+      "container_name": "test-nginx",
+      "image_name": "nginx",
+      "timestamp": "2026-04-28T02:08:47.727097",
+      "action": "scan_enqueued",
+      "job_id": "f7ea7be8-c94d-471e-9a1a-51fd2c2d11a9",
+      "layer_hash": "653bc09ee38cff31b902e73d12c7e9e30facc30fa81e88ae473cd3a5abf379e0",
+      "logged_at": "2026-04-28T02:08:49.515768"
+    },
+    {
+      "event_id": "ca5c5d33-a79b-4b42-ad0c-6e3ac80bcfc4",
+      "event_type": "container_kill",
+      "container_id": "ca4e4fb32089",
+      "container_name": "test-nginx",
+      "image_name": "nginx",
+      "timestamp": "2026-04-28T02:21:57.426326",
+      "action": "container_stopped",
+      "logged_at": "2026-04-28T02:21:57.428081"
+    },
+    {
+      "event_id": "c32dc348-9dcc-4403-a429-4417a3262539",
+      "event_type": "container_die",
+      "container_id": "ca4e4fb32089",
+      "container_name": "test-nginx",
+      "image_name": "nginx",
+      "timestamp": "2026-04-28T02:21:57.689435",
+      "action": "container_stopped",
+      "logged_at": "2026-04-28T02:21:57.691186"
+    },
+    {
+      "event_id": "b81e1727-567b-40dc-a474-ed4b529c9d06",
+      "event_type": "container_start",
+      "container_id": "f88fd372a320",
+      "container_name": "test-nginx",
+      "image_name": "nginx",
+      "timestamp": "2026-04-28T02:22:17.734211",
+      "action": "scan_enqueued",
+      "job_id": "10b1ca2e-cdd0-45b3-a9b2-595f0116914b",
+      "layer_hash": "653bc09ee38cff31b902e73d12c7e9e30facc30fa81e88ae473cd3a5abf379e0",
+      "logged_at": "2026-04-28T02:22:19.876025"
+    },
+    {
+      "event_id": "bd228535-e597-4da7-be6f-d5ec71d1a74b",
+      "event_type": "container_kill",
+      "container_id": "f88fd372a320",
+      "container_name": "test-nginx",
+      "image_name": "nginx",
+      "timestamp": "2026-04-28T02:23:02.223250",
+      "action": "container_stopped",
+      "logged_at": "2026-04-28T02:23:02.224255"
+    },
+    {
+      "event_id": "d2c5a041-d448-4d12-9be1-421c9ef15edd",
+      "event_type": "container_die",
+      "container_id": "f88fd372a320",
+      "container_name": "test-nginx",
+      "image_name": "nginx",
+      "timestamp": "2026-04-28T02:23:02.509204",
+      "action": "container_stopped",
+      "logged_at": "2026-04-28T02:23:02.510497"
+    },
+    {
+      "event_id": "db5decfe-caa1-4dcb-b087-898f42eadab4",
+      "event_type": "container_start",
+      "container_id": "f88fd372a320",
+      "container_name": "test-nginx",
+      "image_name": "nginx",
+      "timestamp": "2026-04-28T02:31:18.392115",
+      "action": "cache_hit",
+      "layer_hash": "653bc09ee38cff31b902e73d12c7e9e30facc30fa81e88ae473cd3a5abf379e0",
+      "cached_result": {
+        "status": "mock_scan_complete",
+        "worker_id": "9180c0a7-cb83-4d74-93bd-fd924511f5be",
+        "job_id": "10b1ca2e-cdd0-45b3-a9b2-595f0116914b",
+        "image_name": "nginx",
+        "vulnerabilities": {
+          "CRITICAL": 0,
+          "HIGH": 1,
+          "MEDIUM": 4,
+          "LOW": 27
+        },
+        "timestamp": "2026-04-28T02:22:22.198971",
+        "elapsed_ms": 2051.1
+      },
+      "logged_at": "2026-04-28T02:31:31.436751"
+    }
+  ],
+  "queue_depth": 0,
+  "cache_hits": 3,
+  "cache_misses": 4,
+  "saved_at": "2026-04-28T05:16:04.697502"
+}
