@@ -12,12 +12,20 @@ GET  /cache/stats          – extended stats: hit/miss ratios, DB counts.
 POST /cache/purge          – manually trigger expired-entry cleanup in DB.
 """
 
+import logging
 import os
 import threading
 import time
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
+
+# Show recovery logs clearly in the terminal
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s | %(name)s | %(message)s",
+    datefmt="%H:%M:%S",
+)
 
 from cache.cache_common import LayerScanCache
 from cache.storage.cache_db import CacheDB

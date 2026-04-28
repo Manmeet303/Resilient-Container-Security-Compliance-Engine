@@ -161,18 +161,50 @@ class LayerScanCache:
             self.db.delete(layer_hash)
 
     def warm_from_db(self):
-        """Replay unexpired DB entries back into the LRU on node startup."""
+        """
+        Replay unexpired DB entries back into the LRU on node startup.
+        Called automatically on __init__ so the node recovers after a crash.
+        """
         if not self.db:
             return
+
+        import logging
+        logger = logging.getLogger("cache.recovery")
+
         rows = self.db.load_all_valid()
+
+        if not rows:
+            logger.info("🔵 Cache Recovery: No entries found in DB — starting fresh.")
+            return
+
+        logger.info(f"🟡 Cache Recovery Started: Found {len(rows)} entries in SQLite DB...")
+
+        recovered = 0
+        skipped   = 0
+
         for row in rows:
             payload = {
-                "data": row["scan_result"],
+                "data":       row["scan_result"],
                 "created_at": time.time(),
                 "expires_at": row["expires_at"],
-                "hit_count": row["hit_count"],
+                "hit_count":  row["hit_count"],
             }
-            self.lru.put(row["layer_hash"], payload)
+            evicted = self.lru.put(row["layer_hash"], payload)
+            if evicted:
+                skipped += 1
+            else:
+                recovered += 1
+            logger.info(
+                f"   ✅ Recovered: layer_hash={row['layer_hash'][:16]}... "
+                f"| hit_count={row['hit_count']} "
+                f"| expires_in={round(row['expires_at'] - time.time())}s"
+            )
+
+        logger.info(
+            f"🟢 Cache Recovery Complete: "
+            f"{recovered} entries restored to LRU, "
+            f"{skipped} skipped (LRU full)."
+        )
 
     def stats(self) -> dict:
         total = self._hits + self._misses
