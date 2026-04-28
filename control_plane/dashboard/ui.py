@@ -606,6 +606,7 @@ tbody tr:hover td { background: var(--bg); }
 // ── State ──────────────────────────────────────────────────────────────────────
 let ws = null, events = [], containers = {}, workers = {}, auditLog = [];
 let cacheHits = 0, cacheMisses = 0, failovers = 0, totalEvents = 0;
+let lastKnownAliveWorkers = 0;
 let wsQueueDepthReceived = false;  // true once first WS queue_depth_update arrives
 let startTime = Date.now(), reconnectTimer = null;
 let activeTab = 'containers';
@@ -740,15 +741,36 @@ function handleEvent(ev) {
   } else if (type === 'cache_miss') {
     cacheMisses++; updateCacheRatio(); addEvent(ev, 'amber');
   } else if (type === 'worker_update') {
-    workers[ev.worker_id] = { worker_id: ev.worker_id, status: ev.status, load: ev.load };
-    renderWorkers(); if (ev.load > 0) flashPipe('pipe-dispatch');
+    const existedBefore = !!workers[ev.worker_id];
+    const hadDeadWorkerBefore = Object.values(workers).some(w => (w.status || 'alive') === 'dead');
+    const newStatus = ev.status || 'alive';
+
+    workers[ev.worker_id] = {
+      worker_id: ev.worker_id,
+      status: newStatus,
+      load: ev.load || 0,
+      jobs_completed: ev.jobs_completed || 0
+    };
+
+    renderWorkers();
+    if (ev.load > 0) flashPipe('pipe-dispatch');
+
+    /*
+      HEALTH FIX:
+      When a worker dies, health drops.
+      When the scheduler creates/registers a NEW alive worker after that,
+      health should recover back to 100 because the system replaced the failed worker.
+    */
+    if (!existedBefore && hadDeadWorkerBefore && newStatus !== 'dead') {
+      setTimeout(() => recoverHealthTo100('Replacement worker alive'), 500);
+    }
   } else if (type === 'worker_dead') {
     if (workers[ev.worker_id]) workers[ev.worker_id].status = 'dead';
     renderWorkers(); addEvent(ev, 'red');
   } else if (type === 'auto_failover') {
     failovers++; setEl('m-failovers', failovers); flashPipe('pipe-failover'); addEvent(ev, 'purple');
-    // score went down on die, now recover on successful replica
-    setTimeout(() => applyHealthDelta('failover_recovered'), 800);
+    // score went down on failure; once replica is created, recover back to full health
+    setTimeout(() => recoverHealthTo100('Replica created'), 800);
     if (ev.replica_name) {
       containers[ev.replica_name] = { container_id: ev.replica_name, name: ev.replica_name, image: ev.image||'?', status: 'running', is_replica: true };
       renderContainers();
@@ -932,6 +954,52 @@ function applyHealthDelta(type, customLabel) {
   updateHealthDisplay(); renderHealthEventLog();
 }
 
+/*
+  This is the important heartbeat/recovery fix.
+  Old behavior:
+    Worker dies -> health drops and stays low.
+  New behavior:
+    Worker dies -> health drops.
+    Replacement/replica worker appears -> health jumps back to 100.
+*/
+function recoverHealthTo100(label) {
+  if (healthScore >= 100) {
+    updateHealthDisplay();
+    return;
+  }
+
+  const before = healthScore;
+  const delta = 100 - before;
+  healthScore = 100;
+
+  healthHistory.push({
+    t: Date.now(),
+    v: healthScore,
+    label: label || 'Recovered',
+    delta: delta,
+    color: '#16a34a'
+  });
+
+  if (healthHistory.length > MAX_PTS) healthHistory.shift();
+
+  healthEventLog.unshift({
+    time: new Date().toTimeString().slice(0,8),
+    event: label || 'Recovered',
+    delta: delta,
+    score: healthScore
+  });
+
+  if (healthEventLog.length > 100) healthEventLog.pop();
+
+  updateHealthDisplay();
+  renderHealthEventLog();
+
+  const healthTab = document.getElementById('tab-health');
+  if (healthTab && healthTab.classList.contains('active')) {
+    drawAllGraphs();
+  }
+}
+
 function updateHealthDisplay() {
   const el = document.getElementById('health-score-display');
   const badge = document.getElementById('health-status-badge');
@@ -1043,6 +1111,18 @@ setInterval(()=>{
   rateHistory.push({t:now,v:rate}); if(rateHistory.length>MAX_PTS) rateHistory.shift();
   setEl('event-rate-label',rate+' events/min');
   const totalLoad=Object.values(workers).reduce((s,w)=>s+(w.load||0),0);
+
+  // Backup recovery check:
+  // If dashboard has dead workers, but at least one alive replacement is now present,
+  // recover the health score back to 100 even if the recovery came from /status polling.
+  const workerList = Object.values(workers);
+  const aliveWorkers = workerList.filter(w => (w.status || 'alive') !== 'dead').length;
+  const deadWorkers = workerList.filter(w => (w.status || 'alive') === 'dead').length;
+  if (deadWorkers > 0 && aliveWorkers > lastKnownAliveWorkers && healthScore < 100) {
+    recoverHealthTo100('Replacement worker alive');
+  }
+  lastKnownAliveWorkers = aliveWorkers;
+
   loadHistory.push({t:now,v:totalLoad}); if(loadHistory.length>MAX_PTS) loadHistory.shift();
   setEl('worker-load-label',totalLoad+' active jobs');
   const healthTab=document.getElementById('tab-health');
