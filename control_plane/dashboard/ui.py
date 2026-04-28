@@ -605,6 +605,7 @@ tbody tr:hover td { background: var(--bg); }
 <script>
 // ── State ──────────────────────────────────────────────────────────────────────
 let ws = null, events = [], containers = {}, workers = {}, auditLog = [];
+let workerJobHistory = {};  // workerId → [{time, image, status, vulns, elapsed_ms}]
 let cacheHits = 0, cacheMisses = 0, failovers = 0, totalEvents = 0;
 let lastKnownAliveWorkers = 0;
 let wsQueueDepthReceived = false;  // true once first WS queue_depth_update arrives
@@ -682,7 +683,21 @@ async function pollStatus() {
   try {
     const s = await fetch('/status').then(r => r.json());
     if (s.containers) { containers = {}; s.containers.forEach(c => containers[c.container_id] = c); renderContainers(); }
-    if (s.workers)    { workers = {};    s.workers.forEach(w => workers[w.worker_id || w] = w);     renderWorkers(); }
+    if (s.workers) {
+      workers = {};
+      s.workers.forEach(w => {
+        workers[w.worker_id || w] = {
+          worker_id:        w.worker_id || w,
+          status:           w.status || 'alive',
+          load:             w.load || 0,
+          jobs_completed:   w.jobs_completed   || 0,
+          jobs_assigned:    w.jobs_assigned     || 0,
+          events_assigned:  w.events_assigned   || 0,
+          events_completed: w.events_completed  || 0,
+        };
+      });
+      renderWorkers();
+    }
     // Queue depth comes from WebSocket push (queue_depth_update event)
     // which fires on every enqueue/complete — much faster than this 5s poll.
     // Only use /status value as fallback if no WS update has arrived yet.
@@ -746,10 +761,13 @@ function handleEvent(ev) {
     const newStatus = ev.status || 'alive';
 
     workers[ev.worker_id] = {
-      worker_id: ev.worker_id,
-      status: newStatus,
-      load: ev.load || 0,
-      jobs_completed: ev.jobs_completed || 0
+      worker_id:        ev.worker_id,
+      status:           newStatus,
+      load:             ev.load || 0,
+      jobs_completed:   ev.jobs_completed   || workers[ev.worker_id]?.jobs_completed   || 0,
+      jobs_assigned:    ev.jobs_assigned     || workers[ev.worker_id]?.jobs_assigned    || 0,
+      events_assigned:  ev.events_assigned   || workers[ev.worker_id]?.events_assigned  || 0,
+      events_completed: ev.events_completed  || workers[ev.worker_id]?.events_completed || 0,
     };
 
     renderWorkers();
@@ -777,6 +795,19 @@ function handleEvent(ev) {
     }
   } else if (type === 'scan_complete') {
     flashPipe('pipe-scan'); addEvent(ev, 'green');
+    // record in workerJobHistory so worker card shows what this worker did
+    if (ev.worker_id) {
+      if (!workerJobHistory[ev.worker_id]) workerJobHistory[ev.worker_id] = [];
+      workerJobHistory[ev.worker_id].push({
+        time:       fmtTime(ev.timestamp),
+        image:      ev.image_name || '?',
+        status:     'completed',
+        vulns:      ev.vulnerabilities || null,
+        elapsed_ms: ev.elapsed_ms ? Math.round(ev.elapsed_ms) : null,
+      });
+      // keep last 20 per worker
+      if (workerJobHistory[ev.worker_id].length > 20) workerJobHistory[ev.worker_id].shift();
+    }
     if (ev.container_id && containers[ev.container_id]) {
       containers[ev.container_id].vulnerabilities = ev.vulnerabilities;
       containers[ev.container_id].scan_status = ev.status;
@@ -834,19 +865,112 @@ function renderWorkers() {
   setEl('worker-count-tag', list.length + ' workers');
   setEl('tab-count-workers', list.length);
   setEl('pipe-dispatch-sub', list.length + ' workers');
-  if (!list.length) { grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚙️</div><div class="empty-state-text">No workers registered</div></div>'; return; }
+  if (!list.length) {
+    grid.innerHTML = '<div class="empty-state"><div class="empty-state-icon">⚙️</div><div class="empty-state-text">No workers registered yet</div></div>';
+    return;
+  }
   grid.innerHTML = list.map(w => {
-    const id = w.worker_id || w;
-    const status = w.status || 'alive';
-    const load = w.load || 0;
-    const done = w.jobs_completed || 0;
-    const isDead = status === 'dead';
-    return '<div class="worker-card' + (isDead ? ' dead' : '') + '">' +
-      '<div class="worker-id">' + id + '</div>' +
-      '<div class="worker-row"><span class="worker-row-label">Status</span><span class="pill ' + (isDead ? 'pill-red' : 'pill-green') + '" style="font-size:0.75rem;padding:3px 10px;"><span class="dot"></span>' + status + '</span></div>' +
-      '<div class="worker-row"><span class="worker-row-label">Current Load</span><span class="worker-row-val">' + load + '</span></div>' +
-      '<div class="worker-row"><span class="worker-row-label">Jobs Completed</span><span class="worker-row-val">' + done + '</span></div>' +
+    const id      = w.worker_id || w;
+    const status  = w.status || 'alive';
+    const load    = w.load || 0;
+    const assigned    = w.jobs_assigned    || 0;
+    const completed   = w.jobs_completed   || 0;
+    const evAssigned  = w.events_assigned  || 0;
+    const evCompleted = w.events_completed || 0;
+    const failed      = Math.max(0, assigned - completed);
+    const isDead  = status === 'dead';
+    const pillCls = isDead ? 'pill-red' : load > 0 ? 'pill-amber' : 'pill-green';
+    const statusLabel = isDead ? 'dead' : load > 0 ? 'scanning' : 'idle';
+
+    // progress bar width
+    const pct = assigned > 0 ? Math.round((completed / assigned) * 100) : 0;
+    const barColor = isDead ? '#dc2626' : completed === assigned && assigned > 0 ? '#16a34a' : '#2563eb';
+
+    return '' +
+      '<div class="worker-card' + (isDead ? ' dead' : '') + '">' +
+
+      // ── header row ─────────────────────────────────────────────────────
+      '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">' +
+        '<div class="worker-id" style="margin-bottom:0;">' + id.slice(0,8) + '…' + id.slice(-4) + '</div>' +
+        '<span class="pill ' + pillCls + '" style="font-size:0.72rem;padding:3px 10px;">' +
+          '<span class="dot"></span>' + statusLabel +
+        '</span>' +
+      '</div>' +
+
+      // ── stat grid ──────────────────────────────────────────────────────
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;">' +
+
+        // Assigned
+        '<div style="background:var(--accent-bg);border-radius:8px;padding:8px 10px;">' +
+          '<div style="font-size:0.68rem;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Jobs Assigned</div>' +
+          '<div style="font-family:var(--mono);font-size:1.4rem;font-weight:600;color:var(--accent);">' + assigned + '</div>' +
+        '</div>' +
+
+        // Completed
+        '<div style="background:var(--green-bg);border-radius:8px;padding:8px 10px;">' +
+          '<div style="font-size:0.68rem;font-weight:600;color:var(--green);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Jobs Completed</div>' +
+          '<div style="font-family:var(--mono);font-size:1.4rem;font-weight:600;color:var(--green);">' + completed + '</div>' +
+        '</div>' +
+
+        // Current Load
+        '<div style="background:' + (load > 0 ? 'var(--amber-bg)' : 'var(--bg)') + ';border-radius:8px;padding:8px 10px;">' +
+          '<div style="font-size:0.68rem;font-weight:600;color:' + (load > 0 ? 'var(--amber)' : 'var(--muted)') + ';text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Current Load</div>' +
+          '<div style="font-family:var(--mono);font-size:1.4rem;font-weight:600;color:' + (load > 0 ? 'var(--amber)' : 'var(--muted)') + ';">' + load + '</div>' +
+        '</div>' +
+
+        // Failed/Requeued
+        '<div style="background:' + (failed > 0 ? 'var(--red-bg)' : 'var(--bg)') + ';border-radius:8px;padding:8px 10px;">' +
+          '<div style="font-size:0.68rem;font-weight:600;color:' + (failed > 0 ? 'var(--red)' : 'var(--muted)') + ';text-transform:uppercase;letter-spacing:0.05em;margin-bottom:4px;">Failed/Requeued</div>' +
+          '<div style="font-family:var(--mono);font-size:1.4rem;font-weight:600;color:' + (failed > 0 ? 'var(--red)' : 'var(--muted)') + ';">' + failed + '</div>' +
+        '</div>' +
+
+      '</div>' +
+
+      // ── progress bar ───────────────────────────────────────────────────
+      (assigned > 0 ? (
+        '<div style="margin-bottom:10px;">' +
+          '<div style="display:flex;justify-content:space-between;font-size:0.72rem;color:var(--muted);margin-bottom:4px;">' +
+            '<span>Completion</span><span>' + pct + '% (' + completed + '/' + assigned + ')</span>' +
+          '</div>' +
+          '<div style="background:var(--border);border-radius:100px;height:6px;overflow:hidden;">' +
+            '<div style="height:100%;width:' + pct + '%;background:' + barColor + ';border-radius:100px;transition:width 0.5s ease;"></div>' +
+          '</div>' +
+        '</div>'
+      ) : '') +
+
+      // ── job activity log ───────────────────────────────────────────────
+      '<div style="border-top:1px solid var(--border);padding-top:10px;">' +
+        '<div style="font-size:0.72rem;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Activity</div>' +
+        buildWorkerActivity(id, assigned, completed, failed, load, isDead) +
+      '</div>' +
+
       '</div>';
+  }).join('');
+}
+
+function buildWorkerActivity(workerId, assigned, completed, failed, load, isDead) {
+  // Build activity log from workerJobHistory
+  const history = workerJobHistory[workerId] || [];
+  if (history.length === 0 && assigned === 0) {
+    return '<div style="font-size:0.78rem;color:var(--muted2);font-style:italic;">No jobs yet</div>';
+  }
+  if (history.length === 0 && assigned > 0) {
+    return '<div style="font-size:0.78rem;color:var(--muted2);">Processing ' + assigned + ' job(s)...</div>';
+  }
+  return history.slice(-5).reverse().map(entry => {
+    const dot = entry.status === 'completed' ? '#16a34a' : entry.status === 'running' ? '#2563eb' : '#dc2626';
+    const label = entry.status === 'completed' ? '✓' : entry.status === 'running' ? '⟳' : '✗';
+    return '<div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:5px;">' +
+      '<span style="color:' + dot + ';font-size:0.9rem;line-height:1.2;">' + label + '</span>' +
+      '<div style="font-size:0.78rem;color:var(--text2);line-height:1.4;">' +
+        '<span style="font-family:var(--mono);color:var(--muted);">' + entry.time + '</span>  ' +
+        '<strong>' + entry.image + '</strong>' +
+        (entry.vulns ? '  <span style="color:' + (entry.vulns.CRITICAL > 0 ? 'var(--red)' : 'var(--green)') + ';">' +
+          entry.vulns.CRITICAL + 'C/' + entry.vulns.HIGH + 'H' +
+        '</span>' : '') +
+        (entry.elapsed_ms ? '  <span style="color:var(--muted);">' + entry.elapsed_ms + 'ms</span>' : '') +
+      '</div>' +
+    '</div>';
   }).join('');
 }
 
